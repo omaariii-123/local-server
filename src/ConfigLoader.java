@@ -14,7 +14,6 @@ class ConfigLoader {
 	}
 	public ServerConfig load(){
 		File configFile = new File(this.filePath);
-
 		if (!configFile.exists()){
 			return null;
 		}
@@ -32,11 +31,17 @@ class ConfigLoader {
 			}
 		} catch (FileNotFoundException error){
 			System.out.println(error);
+			return null;
+		}
+		JsonScanner lexer = new JsonScanner(content.toString());
+		lexer.scanTokens().forEach(x -> System.err.println(x.toString()));;
+		if (!this.validate(config)){
+			return null;
 		}
 
-		return this.validate(content.toString())? config : null;
+		return config;
 	}
-	private boolean validate(String data){
+	private boolean validate(ServerConfig config){
 					System.out.println("testttt");
 		return true;
 	}
