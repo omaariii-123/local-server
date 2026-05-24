@@ -1,33 +1,6 @@
-[
-  {
-    "server_name": "main_server",
-    "is_default": true,
-    "host": "127.0.0.1",
-    "ports": [8080, 8081],
-    "client_max_body_size": 1048576,
-    "error_pages": {
-      "404": "/custom_404.html",
-      "500": "/custom_500.html"
-    },
-    "routes": [
-      {
-        "path": "/",
-        "root": "/var/www/html",
-        "methods": ["GET"],
-        "index": "index.html",
-        "autoindex": false
-      },
-      {
-        "path": "/api",
-        "root": "/var/www/api",
-        "methods": ["GET", "POST", "DELETE"],
-        "cgi_extension": ".py",
-        "upload_dir": "/var/www/uploads"
-      },
-      {
-        "path": "/old-site",
-        "return": "301 /new-site"
-      }
-    ]
-  }
-]
+{
+"host": "127.0.0.1",
+"port": 8080,
+"debug": true,
+"max_connections": 100
+}

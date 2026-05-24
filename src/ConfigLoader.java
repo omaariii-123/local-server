@@ -34,7 +34,10 @@ class ConfigLoader {
 			return null;
 		}
 		JsonScanner lexer = new JsonScanner(content.toString());
-		lexer.scanTokens().forEach(x -> System.err.println(x.toString()));;
+		JsonParser  parser = new JsonParser(lexer.scanTokens());
+				lexer.scanTokens().forEach(x-> System.err.println(x.toString()));
+
+		parser.parse().forEach((x, y) -> System.err.println(x.toString()));;
 		if (!this.validate(config)){
 			return null;
 		}
