@@ -1,6 +1,4 @@
 package src;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.List;
 
 public class JsonParser {
@@ -30,53 +28,79 @@ public class JsonParser {
 
     private Token peek(){
         return tokens.get(current);
-    }
+    }   
 
     private Token consume(TokenType type, String message) {
         if (check(type)) return advance();
         throw new RuntimeException(message + " Found: " + peek().type);
     }
 
-    public Map<String, Object> parse() {
+    public JsonElement parse() {
         consume(TokenType.LEFT_BRACE, "Expected '{' at the beginning of the file.");
         return parseObject();
     }
 
-    public Map<String, Object> parseObject() {
-        Map<String, Object> map = new HashMap<>();
-
+    public JsonObject parseObject() {
+        JsonObject obj = new JsonObject();
         while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
             Token tokenKey = consume(TokenType.STRING, "Expected a string key!");
             consume(TokenType.COLON, "Expected a colon!");
-            Object tokenValue = parseValue();
-            map.put(tokenKey.lexeme, tokenValue);
+            JsonElement tokenValue = parseValue();
+            obj.values.put(tokenKey.lexeme, tokenValue);       
             if (check(TokenType.COMMA)){
                 advance();
             }
             else {
                 break;
             }
+            
         }
+        
         consume(TokenType.RIGHT_BRACE, "Expected '}' at the end of the object.");
-        return map;
+        return obj;
+    }
+
+    private  JsonArray parseArray(){
+        JsonArray arr = new JsonArray();
+        while (!check(TokenType.RIGHT_BRACKET) && !isAtEnd()){
+            JsonElement tokenValue =  parseValue();
+            arr.elements.add(tokenValue);
+             if (check(TokenType.COMMA)){
+                advance();
+            }
+            else {
+                break;
+            }
+        }
+        consume(TokenType.RIGHT_BRACKET, "Expected ']' at the end of the Array.");
+        return arr;
     }
     
-    private Object parseValue() {
+    private JsonElement parseValue() {
         Token token = peek();
 
         switch (token.type) {
-            case STRING:
             case NUMBER:
+                return  new JsonNumber(Integer.parseInt(advance().lexeme));
             case TRUE:
+                advance();
+                return  new JsonBoolean(true);
             case FALSE:
-                return advance().lexeme;
+                advance();
+                return  new JsonBoolean(false);
+            case NULL:
+                advance();
+                return new JsonNull();
+            case STRING:
+                return new JsonString(advance().lexeme);
             
             case LEFT_BRACE:
+                advance();
                 return parseObject();
                 
             case LEFT_BRACKET:
-                return new Object();//parseArray(); 
-                
+                advance();
+                return parseArray(); 
             default:
                 throw new RuntimeException("Unexpected value: " + token.type);
         }

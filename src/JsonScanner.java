@@ -1,6 +1,67 @@
 package src;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+interface JsonElement { }
+
+ class JsonObject implements JsonElement {
+    public final Map<String, JsonElement> values = new HashMap<>();
+    @Override
+    public String toString() {
+        // This will automatically call the toString() of every element inside!
+        return values.toString(); 
+    }
+}
+
+ class JsonArray implements JsonElement {
+    public final List<JsonElement> elements = new ArrayList<>();
+    @Override
+    public String toString() {
+        // This will automatically call the toString() of every element inside!
+        return elements.toString(); 
+    }
+}
+
+class JsonString implements JsonElement {
+    public final String value;
+    public JsonString(String value) { this.value = value; }
+    @Override
+    public String toString() {
+       
+        return "\"" + value + "\""; // Adds quotes back for visualization
+    }
+}
+class JsonNull implements JsonElement{
+     @Override
+    public String toString() {
+        return "null";
+    }
+}
+class JsonBoolean implements JsonElement{
+    public final boolean value;
+    public JsonBoolean(boolean bool){
+        this.value = bool;
+    }
+    @Override
+    public String toString() {
+        if (this.value){
+            return "true";
+        }
+        return "false";
+    }
+}
+
+class JsonNumber implements JsonElement{
+    public final int value;
+    public JsonNumber(int num){
+        this.value = num;
+    }
+    @Override
+    public String toString() {
+        return String.valueOf(value);
+    }
+}
 
 public class JsonScanner {
     private final String input;
@@ -33,7 +94,7 @@ public class JsonScanner {
     }
 
     private boolean isAlpha(char c) {
-        return c >= 'a' && c <= 'z'; // JSON only uses lowercase for true/false/null
+        return c >= 'a' && c <= 'z' ; // JSON only uses lowercase for true/false/null
     }
     private void string(){
         while(peek() != '"' && !isAtEnd()){

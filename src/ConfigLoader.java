@@ -2,8 +2,6 @@
 package src;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.io.FileNotFoundException;	
 import java.util.Scanner;
 
@@ -35,9 +33,18 @@ class ConfigLoader {
 		}
 		JsonScanner lexer = new JsonScanner(content.toString());
 		JsonParser  parser = new JsonParser(lexer.scanTokens());
-				lexer.scanTokens().forEach(x-> System.err.println(x.toString()));
+		lexer.scanTokens();
+		JsonElement res = parser.parse();
+		if (res instanceof JsonArray) {
+			JsonArray arr = (JsonArray) res;
+			arr.elements.forEach((x) -> System.err.println(x.toString()));
+		} else if (res instanceof JsonObject){
+			JsonObject obj = (JsonObject) res;
+			obj.values.forEach((x, y) -> System.err.println(x +  y.toString()));
 
-		parser.parse().forEach((x, y) -> System.err.println(x.toString()));;
+		}else {
+			System.err.println(res);
+		}
 		if (!this.validate(config)){
 			return null;
 		}

@@ -1,6 +1,46 @@
 {
-"host": "127.0.0.1",
-"port": 8080,
-"debug": true,
-"max_connections": 100
+  "serverConfig": {
+    "port": 8080,
+    "host": "0.0.0.0",
+    "isActive": true,
+    "features": {
+      "cors": false,
+      "logging": true,
+      "ssl": null
+    }
+  },
+  "database": {
+    "connections": [
+      {
+        "name": "primary",
+        "url": "jdbc:postgresql://localhost:5432/main",
+        "poolSize": 20,
+        "timeoutMs": 5000
+      },
+      {
+        "name": "replica",
+        "url": "jdbc:postgresql://localhost:5433/replica",
+        "poolSize": 5,
+        "timeoutMs": -1
+      }
+    ],
+    "emptyArrayTest": [],
+    "emptyObjectTest": {}
+  },
+  
+  "matrix": [
+    [1, 2, 3],
+    [4, 5, 6],
+    [
+      {
+        "deeply": {
+          "nested": {
+            "value": 42
+          }
+        }
+      },
+      null,
+      true
+    ]
+  ]
 }
