@@ -1,46 +1,63 @@
 {
-  "serverConfig": {
-    "port": 8080,
-    "host": "0.0.0.0",
-    "isActive": true,
-    "features": {
-      "cors": false,
-      "logging": true,
-      "ssl": null
-    }
-  },
-  "database": {
-    "connections": [
-      {
-        "name": "primary",
-        "url": "jdbc:postgresql://localhost:5432/main",
-        "poolSize": 20,
-        "timeoutMs": 5000
+  "servers": [
+    {
+      "host": "127.0.0.1",
+      "ports": [8080, 8081, 8082],
+      "isDefaultServer": true,
+      "clientMaxBodySize": 10485760,
+      "errorPages": {
+        "404": "/var/www/errors/404.html",
+        "403": "/var/www/errors/403.html",
+        "500": "/var/www/errors/500.html"
       },
-      {
-        "name": "replica",
-        "url": "jdbc:postgresql://localhost:5433/replica",
-        "poolSize": 5,
-        "timeoutMs": -1
-      }
-    ],
-    "emptyArrayTest": [],
-    "emptyObjectTest": {}
-  },
-  
-  "matrix": [
-    [1, 2, 3],
-    [4, 5, 6],
-    [
-      {
-        "deeply": {
-          "nested": {
-            "value": 42
+      "routes": [
+        {
+          "path": "/",
+          "root": "/var/www/html",
+          "acceptedMethods": ["GET", "POST"],
+          "index": "index.html",
+          "autoindex": false
+        },
+        {
+          "path": "/downloads",
+          "root": "/var/www/downloads",
+          "acceptedMethods": ["GET"],
+          "index": null,
+          "autoindex": true
+        },
+        {
+          "path": "/cgi-bin",
+          "root": "/var/www/cgi-bin",
+          "acceptedMethods": ["GET", "POST", "DELETE"],
+          "cgi": {
+            ".php": "/usr/bin/php-cgi",
+            ".py": "/usr/bin/python3"
+          }
+        },
+        {
+          "path": "/old-blog",
+          "redirection": {
+            "code": 301,
+            "url": "https://newblog.example.com"
           }
         }
-      },
-      null,
-      true
-    ]
+      ]
+    },
+    {
+      "host": "example.com",
+      "ports": [80],
+      "isDefaultServer": false,
+      "clientMaxBodySize": 2048,
+      "errorPages": {},
+      "routes": [
+        {
+          "path": "/",
+          "root": "/var/www/example",
+          "acceptedMethods": ["GET"],
+          "index": "home.html",
+          "autoindex": false
+        }
+      ]
+    }
   ]
 }
