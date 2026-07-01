@@ -21,7 +21,6 @@ class ConfigLoader {
 		if (!configFile.canRead()){
 			return null;
 		}
-		//ServerConfig config = new ServerConfig();
 		StringBuilder content = new StringBuilder();
 		try (Scanner reader = new Scanner(configFile)){
 			while ( reader.hasNext()){
@@ -34,26 +33,19 @@ class ConfigLoader {
 		JsonScanner lexer = new JsonScanner(content.toString());
 		JsonParser  parser = new JsonParser(lexer.scanTokens());
 		lexer.scanTokens();
-		JsonElement element = parser.parse();
+		JsonObject element = (JsonObject)parser.parse();
+		ServerConfig config = new ServerConfig();
+		JsonArray arr = (JsonArray)element.values.get("servers");
+        JsonObject node1 = (JsonObject)arr.elements.get(0);
+		config.hydrate(node1);
 		
-		switch (element) {
-    		case JsonString s  -> System.out.println("Parsed a string: " + s.value);
-    		case JsonNumber n  -> System.out.println("Parsed a number: " + n.value);
-    		case JsonBoolean b -> System.out.println("Parsed a boolean: " + b.value);
-    		case JsonObject o  -> Route.hydrate(o);
-    		case JsonArray a   -> System.out.println("Found an array of size: " + a.elements.size());
-    		case JsonNull n    -> System.out.println("Value was explicitly null.");
-    		case null          -> System.out.println("Key didn't exist in the map at all.");
-    		default            -> throw new IllegalStateException("Unknown AST node!");
-		}
-		if (!this.validate(null)){
+		if (!this.validate(config)){
 			return null;
 		}
 
-		return new ServerConfig(null);
+		return new ServerConfig();
 	}
 	private boolean validate(ServerConfig config){
-					System.out.println("testttt");
 		return true;
 	}
 }
