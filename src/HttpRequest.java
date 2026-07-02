@@ -1,22 +1,18 @@
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 
 public class HttpRequest {
 
-    public HashMap<String, String> Headers;
+    public HashMap<String, String> Headers = new HashMap<>();
+    private ByteArrayOutputStream body = new ByteArrayOutputStream();
     RequestLine requestLine;
-    private byte[] body;
-
-    // public HttpRequest(String method, String path, HashMap<String, String>
-    // headers, byte[] body) {
-    // this.method = method;
-    // this.path = path;
-    // this.Headers = headers;
-    // this.body = body;
-    // }
-
+    //
     public boolean HasBody() {
-        return this.body != null;
+        return this.body.size() != 0;
+    }
+
+    public void appendToBody(byte b) {
+        body.write(b);
     }
 
 }

@@ -16,11 +16,6 @@ public class RequestLine {
     String method;
     String protocol;
 
-    public RequestLine(String method ,String path ,String protocol) {
-            this.path = path;
-            this.method = method;
-            this.protocol = protocol;
-    }
 
     public boolean validate() {
 
@@ -41,5 +36,14 @@ public class RequestLine {
         }
 
         return PATH_PATTERN.matcher(path).matches();
+    }
+    public void setMethod(String method) {
+        this.method = method;
+    }
+    public void setPath(String path) {
+        this.path = path;
+    }
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
     }
 }

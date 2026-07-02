@@ -1,61 +1,137 @@
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
+
+import utils.RequestFsm;
 
 public class HttpParser {
-    public int findEndHeader(ByteBuffer bytes) {
+    private final StringBuilder token = new StringBuilder();
+    private String currentHeaderName;
+    private HttpRequest currentRequest = new HttpRequest();
+    private RequestFsm state = RequestFsm.READ_METHOD;
+    private Integer BodyBytes = 0;
+    // private HttpResponse response;
 
-        int limit = bytes.limit();
-        int state = 0;
-        for (int i = 0; i < limit; i++) {
-            if (bytes.get(i) == '\r' && state == 0)
-                state = 1;
-            else if (bytes.get(i) == '\n' && state == 1)
-                state = 2;
-            else if (bytes.get(i) == '\r' && state == 2)
-                state = 3;
-            else if (bytes.get(i) == '\n' && state == 3) {
-                return i + 1;
-            } else {
-                state = bytes.get(i) == '\r' ? 1 : 0;
+    public void prepareForNextRequest() {
+        // this.response = null;
+        this.currentRequest = null;
+        this.state = RequestFsm.READ_METHOD;
+    }
+
+    private boolean endsWithCRLF() {
+        return token.length() >= 2
+                && token.charAt(token.length() - 2) == '\r'
+                && token.charAt(token.length() - 1) == '\n';
+    }
+
+    public HttpRequest ParseRequest(ByteBuffer buffer) {
+
+        while (buffer.hasRemaining()) {
+
+            byte b = buffer.get();
+
+            switch (state) {
+                case READ_METHOD:
+                    if (b == ' ') {
+                        currentRequest.requestLine.setMethod(token.toString());
+                        token.setLength(0);
+                        state = RequestFsm.READ_URI;
+                    } else {
+                        token.append((char) b);
+                    }
+                    break;
+                case READ_URI:
+                    if (b == ' ') {
+                        currentRequest.requestLine.setPath(token.toString());
+                        token.setLength(0);
+                        state = RequestFsm.READ_VERSION;
+                    } else {
+                        token.append((char) b);
+                    }
+                    break;
+                case READ_VERSION:
+                    token.append((char) b);
+                    if (endsWithCRLF()) {
+                        currentRequest.requestLine.setProtocol(
+                                token.substring(0, token.length() - 2));
+                        token.setLength(0);
+                        state = RequestFsm.READ_HEADER_NAME;
+
+                    }
+                    break;
+                case READ_HEADER_NAME:
+                    // Blank line -> end of headers
+                    if (b == '\r') {
+                        token.append((char) b);
+                    } else if (b == '\n') {
+                        token.append((char) b);
+                        if (endsWithCRLF() && token.length() == 2) {
+                            token.setLength(0);
+                            String contentLength = currentRequest.Headers.get("Content-Length");
+                            if (contentLength != null
+                                    && Integer.parseInt(contentLength) > 0) {
+                                state = RequestFsm.READING_BODY;
+                                BodyBytes = Integer.parseInt((contentLength));
+                            } else {
+                                state = RequestFsm.REQUEST_COMPLETE;
+                            }
+                        }
+                    } else if (b == ':') {
+                        currentHeaderName = token.toString();
+                        token.setLength(0);
+                        state = RequestFsm.READ_HEADER_VALUE;
+                    } else {
+                        token.append((char) b);
+                    }
+                    break;
+
+                case READ_HEADER_VALUE:
+
+                    token.append((char) b);
+                    if (endsWithCRLF()) {
+                        currentRequest.Headers.put(
+                                currentHeaderName,
+                                token.substring(0, token.length() - 2).trim());
+                        token.setLength(0);
+                        state = RequestFsm.READ_HEADER_NAME;
+
+                    }
+                    break;
+
+                case READING_BODY:
+
+                    currentRequest.appendToBody(b);
+                    BodyBytes--;
+                    // TODO:
+                    // Read exactly Content-Length bytes.
+                    // When all bytes are read:
+                    // String KeepAlive = currentRequest.Headers.get("Connection");
+                    //
+                    if (BodyBytes == 0) {
+                        state = RequestFsm.REQUEST_COMPLETE;
+                    }
+
+                    break;
+                case REQUEST_COMPLETE:
+
+                    // TODO:
+                    // Notify caller the request is complete.
+                    // Prepare parser for next request if using keep-alive.
+
+                    HttpRequest finished = currentRequest;
+                    reset();
+                    return finished;
+                default:
+                    break;
             }
+
         }
-        return -1;
+        return null;
     }
 
-    public int findEndRequestLine(ByteBuffer bytes) {
-        int limit = bytes.limit();
-        int state = 0;
-        for (int i = 0; i < limit; i++) {
-            if (bytes.get(i) == '\r' && state == 0)
-                state = 1;
-            else if (bytes.get(i) == '\n' && state == 1)
-                state = 2;
-            else if (bytes.get(i) != '\r' && state == 2) {
-                return i + 1;
-            } else {
-                state = 0;
-            }
-        }
-        return -1;
-    }
-
-    public HashMap<String, String> HeadersParser(ByteBuffer RAWheaders) {
-        return new HashMap<>();
-    }
-
-    public RequestLine RequestLineParser(String RequestLine) {
-        String[] args = RequestLine.split(" ");
-        if (args.length != 3) {
-            // TODO: should invoke BAD REQUSET LATER
-
-        }
-        RequestLine requestline = new RequestLine(args[0], args[1], args[2]);
-        if (!requestline.validate()) {
-            // TODO: should invoke BAD REQUSET LATER
-        }
-        return requestline;
-
+    private void reset() {
+        currentRequest = new HttpRequest();
+        BodyBytes = 0;
+        state = RequestFsm.READ_METHOD;
+        currentHeaderName = "";
     }
 
 }

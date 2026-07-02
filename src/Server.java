@@ -1,16 +1,13 @@
-//Java Program to test 
-//echo server using NIO Selector
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.Set;
-
 
 public class Server {
 
@@ -39,6 +36,7 @@ public class Server {
      * 
      */
     channel.configureBlocking(false);
+    channel.bind(new InetSocketAddress(8080));
     channel.register(selector, SelectionKey.OP_ACCEPT);
     // ByteBuffer buffer = ByteBuffer.allocate(8000);
     while (true) {
@@ -49,14 +47,18 @@ public class Server {
       Iterator<SelectionKey> keyIterator = select_keys.iterator();
       while (keyIterator.hasNext()) {
         SelectionKey key = keyIterator.next();
-        // removing the key so the next time it wont be processed
+        // removing the key so the next time it wont be processed again
         keyIterator.remove();
 
+        if (!key.isValid()) {
+          continue;
+        }
         // if the key is acceptable meaning it the server socket channel respo
         // to accept the connection in order to make a new socket channel for the client
-        // also we trZack a connectionContext to track the current prorgess and state
+        // also we track a connectionContext to track the current prorgess and state
         if (key.isAcceptable()) {
           ServerSocketChannel server = (ServerSocketChannel) (key.channel());
+
           SocketChannel client = server.accept();
           SocketConnection connectionContext = new SocketConnection();
           client.configureBlocking(false);
@@ -64,18 +66,32 @@ public class Server {
 
         }
         if (key.isReadable()) {
-
           SocketChannel client = (SocketChannel) key.channel();
           // we retrieve the attachmenent to get Metadata about the channel also to track
           // our progress
           SocketConnection socketConnection = (SocketConnection) key.attachment();
-          int BytesRead = client.read(socketConnection.readBuffer);
-          if (BytesRead == -1) {
-            key.channel().close();
-            return;
+          while (true) {
+            int BytesRead = client.read(socketConnection.readBuffer);
+            // int n = client.read(socketConnection.readBuffer);
+            if (BytesRead > 0) {
+              System.out.println("Client disconnected: " + client.getRemoteAddress());
+              key.channel().close();
+              key.cancel();
+              break;
+            }
+         
           }
+          socketConnection.readBuffer.flip();
 
-          socketConnection.handleCurrentState(BytesRead);
+          HttpRequest request;
+          while ((request = socketConnection.parser.ParseRequest(socketConnection.readBuffer) )!= null) {
+            //TODO:Routing;
+            key.interestOps(SelectionKey.OP_WRITE);
+            
+          }
+          socketConnection.readBuffer.compact();
+
+  
 
         }
 
