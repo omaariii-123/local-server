@@ -1,13 +1,16 @@
 package src;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ServerConfig {
 	public String host;
 	public int clientMaxBodySize;
     public boolean isDefaultServer;
 	public List<Integer> ports;
+	public Map<String, String> errorPages;
     public List<Route> routes;
 
 	public void hydrate(JsonObject obj) {
@@ -26,6 +29,18 @@ public class ServerConfig {
         		}
     		});
 		}
+		this.errorPages = extract(obj, "errorPages");
+	}
+	private Map<String, String> extract(JsonObject node, String key){
+		Map<String,String> map = new HashMap<>();
+		if(node.values.get("errorPages") instanceof JsonObject o){
+			o.values.forEach((k, value)->{
+				if (value instanceof JsonString s){
+					map.put(k ,s.value);
+				}
+			});
+		}
+		return map;
 	}
 }
  
