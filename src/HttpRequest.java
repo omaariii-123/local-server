@@ -6,7 +6,7 @@ import java.util.HashMap;
 public class HttpRequest {
 
     public HashMap<String, String> Headers = new HashMap<>();
-    private RequestLine requestLine;
+    public RequestLine requestLine;
     private ByteArrayOutputStream body = new ByteArrayOutputStream();
 
 public void appendToBody(byte b) {

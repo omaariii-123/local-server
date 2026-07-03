@@ -33,7 +33,7 @@ public class ServerConfig {
 	}
 	private Map<String, String> extract(JsonObject node, String key){
 		Map<String,String> map = new HashMap<>();
-		if(node.values.get("errorPages") instanceof JsonObject o){
+		if(node.values.get(key) instanceof JsonObject o){
 			o.values.forEach((k, value)->{
 				if (value instanceof JsonString s){
 					map.put(k ,s.value);

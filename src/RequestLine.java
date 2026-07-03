@@ -40,6 +40,9 @@ public class RequestLine {
     public void setPath(String path) {
         this.path = path;
     }
+    public String getPath(){
+        return path;
+    }
     public void setProtocol(String protocol) {
         this.protocol = protocol;
     }

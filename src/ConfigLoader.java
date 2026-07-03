@@ -2,7 +2,8 @@
 package src;
 
 import java.io.File;
-import java.io.FileNotFoundException;	
+import java.io.FileNotFoundException;
+import java.util.List;
 import java.util.Scanner;
 
 class ConfigLoader {
@@ -10,14 +11,14 @@ class ConfigLoader {
 	public ConfigLoader(String filePath){
 		this.filePath = filePath;
 	}
-	public ServerConfig load(){
+	public List<ServerConfig> load(){
 		File configFile = new File(this.filePath);
 		if (!configFile.exists()){
 			return null;
 		}
 		return this.parse(configFile);
 	}
-	private ServerConfig parse(File configFile){
+	private List<ServerConfig> parse(File configFile){
 		if (!configFile.canRead()){
 			return null;
 		}
@@ -42,8 +43,9 @@ class ConfigLoader {
 		if (!this.validate(config)){
 			return null;
 		}
-
-		return new ServerConfig();
+		Router r = new Router();
+		r.handle(new HttpRequest(), List.of(config));
+		return List.of(config);
 	}
 	private boolean validate(ServerConfig config){
 		return true;
