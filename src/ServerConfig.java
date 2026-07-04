@@ -2,6 +2,8 @@ package src;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 public class ServerConfig {
 	public String host;
@@ -26,6 +28,30 @@ public class ServerConfig {
         		}
     		});
 		}
+	}
+
+
+	public Route findRoute(String path) {
+		for (Route route : this.routes) {
+			if (route.path.equals(path)) {
+				return route;
+			}
+		}
+		return null;
+	}
+
+	public Map<Integer, String> getErrorPages() {
+		Map<Integer, String> errorPages = new HashMap<>();
+		for (Route route : this.routes) {
+			if (route.path.startsWith("/error")) {
+				String[] parts = route.path.split("/");
+				if (parts.length == 3 && parts[2].matches("\\d+")) {
+					int statusCode = Integer.parseInt(parts[2]);
+					errorPages.put(statusCode, route.path);
+				}
+			}
+		}
+		return errorPages;
 	}
 }
  

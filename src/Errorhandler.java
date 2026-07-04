@@ -6,7 +6,9 @@ import src.HttpResponse;
 
 public class Errorhandler {
     private Map<Integer, String> errorPagePaths = new HashMap<>();
-    
+    Errorhandler(Map<Integer, String> errorPagePaths) {
+        this.errorPagePaths = errorPagePaths;
+    }
     // public void loadErrorPages(JSONObject errorPagesConfig) {
     // }
     

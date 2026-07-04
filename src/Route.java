@@ -44,4 +44,45 @@ public class Route {
         }
         return methods;
     }
+
+    public boolean allowsMethod(String method) {
+        return acceptedMethods.contains(method);
+    }
+
+    public boolean hasRedirect() {
+        return this.root != null && !this.root.isEmpty();
+    }
+
+    public String getRedirect() {
+        return this.root;
+    }
+    public String getPath() {
+        return this.path;
+    }
+    public List<String> getAcceptedMethods() {
+        return this.acceptedMethods;
+    }
+
+    public boolean isAutoindex() {
+        return this.autoindex;
+    }
+
+    public String getRoot() {
+        return this.root;
+    }
+
+    public boolean isuploadRoute() {
+        return this.path.equals("/upload");
+    }
+
+    public boolean iscgiRoute() {
+        return this.path.equals("/cgi-bin");
+    }
+
+    public HttpResponse handleRedirect(RequestLine request) {
+        String redirectUrl = getRedirect();
+        HttpResponse response = new HttpResponse(302,redirectUrl);
+        // response.addHeader("Location", redirectUrl);
+        return response;
+    }
 }
