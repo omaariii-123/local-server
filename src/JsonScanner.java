@@ -151,42 +151,24 @@ public class JsonScanner {
     }
     private void scanToken(){
         char c = this.advance();
-        switch (c) {
-            case '{':
-                addToken(TokenType.LEFT_BRACE);
-                break;
-            case '}':
-                addToken(TokenType.RIGHT_BRACE);
-                break;
-            case '[':
-                addToken(TokenType.LEFT_BRACKET);
-                break;
-            case ']':
-                addToken(TokenType.RIGHT_BRACKET);
-                break;
-            case ':':
-                addToken(TokenType.COLON);
-                break;
-            case ',':
-                addToken(TokenType.COMMA);
-                break;
-            case '"':
-                string();
-                break;
-                case ' ':
-            case '\r':
-            case '\t':
-            case '\n':
-                break;
-            default:
-                if (isDigit(c) || c == '-'){
+    switch (c) {
+        case '{' -> addToken(TokenType.LEFT_BRACE);
+        case '}' -> addToken(TokenType.RIGHT_BRACE);
+        case '[' -> addToken(TokenType.LEFT_BRACKET);
+        case ']' -> addToken(TokenType.RIGHT_BRACKET);
+        case ':' -> addToken(TokenType.COLON);
+        case ',' -> addToken(TokenType.COMMA);
+        case '"' -> string();
+        case ' ', '\r', '\t', '\n' -> {}        
+        default -> {
+                if (isDigit(c) || c == '-') {
                     number();   
-                }else if ( isAlpha(c)){
+                } else if (isAlpha(c)) {
                     keyword();
-                }else {
+                } else {
                     throw new RuntimeException("Unexpected character: " + c);
                 }
-                break;
+            }
         }
     }
 }

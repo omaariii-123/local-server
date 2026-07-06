@@ -36,8 +36,13 @@ public class JsonParser {
     }
 
     public JsonElement parse() {
-        consume(TokenType.LEFT_BRACE, "Expected '{' at the beginning of the file.");
-        return parseObject();
+        TokenType type = peek().type;
+        consume(type, "Expected '{'  or '[' at the beginning of the file.");
+        return switch (type) {
+            case LEFT_BRACE -> parseObject();
+            case LEFT_BRACKET -> parseArray();
+            default -> throw new IllegalStateException("Unexpected token: " + type + "at the start of the file");
+        };
     }
 
     public JsonObject parseObject() {
@@ -78,31 +83,15 @@ public class JsonParser {
     
     private JsonElement parseValue() {
         Token token = peek();
-
-        switch (token.type) {
-            case NUMBER:
-                return  new JsonNumber(Integer.parseInt(advance().lexeme));
-            case TRUE:
-                advance();
-                return  new JsonBoolean(true);
-            case FALSE:
-                advance();
-                return  new JsonBoolean(false);
-            case NULL:
-                advance();
-                return new JsonNull();
-            case STRING:
-                return new JsonString(advance().lexeme);
-            
-            case LEFT_BRACE:
-                advance();
-                return parseObject();
-                
-            case LEFT_BRACKET:
-                advance();
-                return parseArray(); 
-            default:
-                throw new RuntimeException("Unexpected value: " + token.type);
-        }
+        return  switch (token.type) {
+            case NUMBER ->  new JsonNumber(Integer.parseInt(advance().lexeme));
+            case TRUE -> { advance(); yield  new JsonBoolean(true);}
+            case FALSE -> { advance(); yield  new JsonBoolean(false);}
+            case NULL -> { advance();yield new JsonNull();}
+            case STRING -> new JsonString(advance().lexeme);
+            case LEFT_BRACE -> { advance(); yield parseObject();}
+            case LEFT_BRACKET -> { advance(); yield parseArray();} 
+            default -> throw new RuntimeException("Unexpected value: " + token.type);
+        };
     }
 }

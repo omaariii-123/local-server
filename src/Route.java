@@ -21,8 +21,6 @@ public class Route {
         JsonElement str = node.values.get(key);
         if (str instanceof JsonString s){
             return s.value;
-        }else if (str instanceof JsonNumber n){
-            return String.valueOf(n.value);
         }
         return "";
     }

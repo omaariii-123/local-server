@@ -15,12 +15,9 @@ public class ServerConfig {
 
 	public void hydrate(JsonObject obj) {
 		this.host = Route.extract(obj, "host");
-		this.clientMaxBodySize = Integer.parseInt(Route.extract(obj, "clientMaxBodySize"));
+		this.clientMaxBodySize = extractNumbers(obj, "clientMaxBodySize").get(0);
 		this.isDefaultServer = Route.extract(obj, "isDefaultServer", false);
-		this.ports = Route.extract(obj, new JsonString("ports"))
-                    .stream()
-                    .map(Integer::parseInt)
-                    .toList();
+		this.ports = extractNumbers(obj, "ports");
 		this.routes = new ArrayList<>();
 		if (obj.values.get("routes") instanceof JsonArray arr) {
     		arr.elements.forEach(elem -> {
@@ -41,6 +38,20 @@ public class ServerConfig {
 			});
 		}
 		return map;
+	}
+	private List<Integer> extractNumbers(JsonObject obj, String key){
+		List<Integer> port = new ArrayList<>();
+		var k = obj.values.get(key);
+		 switch(k) {
+			case JsonArray arr -> arr.elements.forEach((p)-> {
+				if (p instanceof JsonNumber n){
+					port.add(n.value);
+				}
+			});
+			case JsonNumber n -> port.add(n.value);
+			default -> {}
+		}
+		return port;
 	}
 }
  

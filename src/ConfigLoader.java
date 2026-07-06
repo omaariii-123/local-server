@@ -3,6 +3,8 @@ package src;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Scanner;
 
@@ -34,18 +36,43 @@ class ConfigLoader {
 		JsonScanner lexer = new JsonScanner(content.toString());
 		JsonParser  parser = new JsonParser(lexer.scanTokens());
 		lexer.scanTokens();
-		JsonObject element = (JsonObject)parser.parse();
-		ServerConfig config = new ServerConfig();
-		JsonArray arr = (JsonArray)element.values.get("servers");
-        JsonObject node1 = (JsonObject)arr.elements.get(0);
-		config.hydrate(node1);
 		
-		if (!this.validate(config)){
-			return null;
+		JsonElement element = parser.parse();
+		List<ServerConfig> list = new ArrayList<>();
+		if (element instanceof JsonObject e) {
+			JsonArray arr = (JsonArray)e.values.get("servers");
+			arr.elements.forEach((x) -> {
+				if (x instanceof JsonObject o){
+					ServerConfig config = new ServerConfig();
+					config.hydrate(o);
+					list.add(config);
+				}
+			});
+		}else if (element instanceof JsonArray e){
+			e.elements.forEach((x) -> {
+				if (x instanceof JsonObject o){
+					ServerConfig config = new ServerConfig();
+					config.hydrate(o);
+					list.add(config);
+				}
+			});
 		}
+		
+		
+		/*if (!this.validate(null)){
+			return null;
+		}*/
 		Router r = new Router();
-		r.handle(new HttpRequest(), List.of(config));
-		return List.of(config);
+		HttpRequest dummyRequest = new HttpRequest();
+
+		dummyRequest.requestLine = new RequestLine();
+		dummyRequest.requestLine.setMethod("GET");
+		dummyRequest.requestLine.setPath("/images/image.png");
+		dummyRequest.Headers = new HashMap<>();
+		dummyRequest.Headers.put("host", "localhost:8080");
+		System.err.println(r.handle(dummyRequest, list));
+		System.err.println(list.get(0).routes.get(0).acceptedMethods);
+		return list;
 	}
 	private boolean validate(ServerConfig config){
 		return true;
