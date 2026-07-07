@@ -34,12 +34,6 @@ public class Router {
         }
         Path finalUri = Path.of(route.root).resolve(leftoverUri);
         if (!Files.exists(finalUri)) {
-            String fileName = finalUri.getFileName().toString();
-        if (fileName.endsWith(".py")) {
-            // We don't serve this! We execute it.
-            return new RouteResult(RouteResult.Action.EXECUTE_CGI, 200, finalUri, "text/html", null);
-        }
-            System.err.println(finalUri);
             return createError(404);
         }
         if (Files.isDirectory(finalUri)){
@@ -53,6 +47,10 @@ public class Router {
                     return createError(403);
                 }
             }
+        }
+        String fileName = finalUri.getFileName().toString();
+        if (fileName.endsWith(".py")) {
+            return new RouteResult(RouteResult.Action.EXECUTE_CGI, 200, finalUri, "text/html", null);
         }
         return new RouteResult(RouteResult.Action.SERVE_FILE, 200, finalUri, getMimeType(finalUri), null);
     }
