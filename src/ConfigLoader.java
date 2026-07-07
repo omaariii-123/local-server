@@ -67,7 +67,7 @@ class ConfigLoader {
 
 		dummyRequest.requestLine = new RequestLine();
 		dummyRequest.requestLine.setMethod("GET");
-		dummyRequest.requestLine.setPath("/images/image.png");
+		dummyRequest.requestLine.setPath("/images/image.py");
 		dummyRequest.Headers = new HashMap<>();
 		dummyRequest.Headers.put("host", "localhost:8080");
 		System.err.println(r.handle(dummyRequest, list));

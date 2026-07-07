@@ -127,19 +127,12 @@ public class JsonScanner {
         }
 
         String text = input.substring(start, current);
-                switch (text) {
-            case "true":
-                tokens.add(new Token(TokenType.TRUE, text));
-                break;
-            case "false":
-                tokens.add(new Token(TokenType.FALSE, text));
-                break;
-            case "null":
-                tokens.add(new Token(TokenType.NULL, text));
-                break;
-            default:
-                throw new RuntimeException("Unexpected keyword: " + text);
-        }
+            switch (text) {
+                case "true" -> tokens.add(new Token(TokenType.TRUE, text));
+                case "false" -> tokens.add(new Token(TokenType.FALSE, text));
+                case "null" -> tokens.add(new Token(TokenType.NULL, text));
+                default -> throw new RuntimeException("Unexpected keyword: " + text);
+            }
     }
     private char peek(){
         if (isAtEnd()) return '\0';

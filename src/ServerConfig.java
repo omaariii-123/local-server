@@ -28,7 +28,7 @@ public class ServerConfig {
 		}
 		this.errorPages = extract(obj, "errorPages");
 	}
-	private Map<String, String> extract(JsonObject node, String key){
+	private  Map<String, String> extract(JsonObject node, String key){
 		Map<String,String> map = new HashMap<>();
 		if(node.values.get(key) instanceof JsonObject o){
 			o.values.forEach((k, value)->{
