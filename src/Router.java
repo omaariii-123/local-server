@@ -1,5 +1,6 @@
 package src;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -18,7 +19,13 @@ public class Router {
         target = extract(request.Headers.get("host"));
         server = findMatchedServer(serverConfigs);
         if (server == null){
-            return createError(500);
+            return new RouteResult(
+                RouteResult.Action.ERROR,
+                500,
+                null,
+                "text/plain",
+                null,
+                null);
         }
         String path = request.requestLine.getPath();
         Route  route = extract(server.routes, path);
@@ -42,17 +49,51 @@ public class Router {
                 finalUri = indexPath;
             } else {
                 if (route.autoindex) {
-                    return new RouteResult(RouteResult.Action.DIRECTORY_LISTING, 200, finalUri, "text/html", null);
+                    return new RouteResult(
+                        RouteResult.Action.DIRECTORY_LISTING,
+                        200,
+                        finalUri,
+                        "text/html",
+                        null,
+                        null);
                 } else {
                     return createError(403);
                 }
             }
         }
-        String fileName = finalUri.getFileName().toString();
+        String fileName = finalUri.getFileName().toString();        
         if (fileName.endsWith(".py")) {
-            return new RouteResult(RouteResult.Action.EXECUTE_CGI, 200, finalUri, "text/html", null);
+            try {
+                CGIHandler cgiHandler = new CGIHandler();
+                
+                CGIHandler.CGIContext context = cgiHandler.execute(
+                    finalUri, 
+                    leftoverUri, 
+                    request.requestLine.method, 
+                    "/usr/bin/python3" 
+                );
+                
+                return new RouteResult(
+                    RouteResult.Action.EXECUTE_CGI, 
+                    200, 
+                    context.tempFile(), 
+                    "text/html", 
+                    null, 
+                    context
+                );
+                
+            } catch (IOException e) {
+                System.err.println("CGI Execution failed: " + e.getMessage());
+                return createError(500); 
+            }
         }
-        return new RouteResult(RouteResult.Action.SERVE_FILE, 200, finalUri, getMimeType(finalUri), null);
+        return new RouteResult(
+            RouteResult.Action.SERVE_FILE, 
+            200, 
+            finalUri, 
+            getMimeType(finalUri), 
+            null, 
+            null);
     }
     private String getMimeType(Path path) {
         try {
@@ -68,6 +109,7 @@ public class Router {
             statusCode, 
             Path.of(server.errorPages.get(String.valueOf(statusCode))), 
             "text/html", 
+            null,
             null
     );
 }    public Target extract(String input) {

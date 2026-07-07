@@ -2,11 +2,10 @@
 package src;
 
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Scanner;
 
 class ConfigLoader {
 	private final String filePath;
@@ -24,19 +23,15 @@ class ConfigLoader {
 		if (!configFile.canRead()){
 			return null;
 		}
-		StringBuilder content = new StringBuilder();
-		try (Scanner reader = new Scanner(configFile)){
-			while ( reader.hasNext()){
-				content.append(reader.nextLine());
-			}
-		} catch (FileNotFoundException error){
-			System.out.println(error);
+		String content;
+		try {
+			content = Files.readString(configFile.toPath());
+		} catch (Exception e){
+			System.out.println(e);
 			return null;
 		}
 		JsonScanner lexer = new JsonScanner(content.toString());
 		JsonParser  parser = new JsonParser(lexer.scanTokens());
-		lexer.scanTokens();
-		
 		JsonElement element = parser.parse();
 		List<ServerConfig> list = new ArrayList<>();
 		if (element instanceof JsonObject e) {
@@ -67,7 +62,7 @@ class ConfigLoader {
 
 		dummyRequest.requestLine = new RequestLine();
 		dummyRequest.requestLine.setMethod("GET");
-		dummyRequest.requestLine.setPath("/images/image.py");
+		dummyRequest.requestLine.setPath("/scripts/script.py");
 		dummyRequest.Headers = new HashMap<>();
 		dummyRequest.Headers.put("host", "localhost:8080");
 		System.err.println(r.handle(dummyRequest, list));

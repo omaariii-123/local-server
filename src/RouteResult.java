@@ -7,7 +7,8 @@ public record RouteResult(
     int statusCode, 
     Path resolvedPath, 
     String contentType, 
-    String redirectUrl
+    String redirectUrl,
+    CGIHandler.CGIContext cgiContext
 ) {
     public enum Action { SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR }
 }
