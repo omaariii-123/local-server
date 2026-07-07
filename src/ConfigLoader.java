@@ -3,6 +3,7 @@ package src;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -52,11 +53,9 @@ class ConfigLoader {
 				}
 			});
 		}
-		
-		
-		/*if (!this.validate(null)){
-			return null;
-		}*/
+		if(!this.validate(list)){
+			System.exit(1);
+		}
 		Router r = new Router();
 		HttpRequest dummyRequest = new HttpRequest();
 
@@ -69,7 +68,33 @@ class ConfigLoader {
 		System.err.println(list.get(0).routes.get(0).acceptedMethods);
 		return list;
 	}
-	private boolean validate(ServerConfig config){
-		return true;
-	}
+	private boolean validate(List<ServerConfig> configs) {
+        java.util.Set<String> validBindings = new java.util.HashSet<>();
+        java.util.List<ServerConfig> invalidConfigs = new java.util.ArrayList<>();
+
+        for (ServerConfig config : configs) {
+            boolean isConfigValid = true;
+            for (Route route : config.routes) {
+                if (!Files.isDirectory(Path.of(route.root))) {
+                    System.err.println("Warning: Dropping server block. Invalid root path: " + route.root);
+                    isConfigValid = false;
+                    break; 
+                }
+            }
+            if (isConfigValid) {
+                for (Integer port : config.ports) {
+                    String signature = config.host + ":" + port;
+                    if (validBindings.contains(signature)) {
+                        System.err.println("FATAL: Duplicate Host/Port binding detected -> " + signature);
+                        return false;
+                    }
+                    validBindings.add(signature);
+                }
+            } else {
+                invalidConfigs.add(config);
+            }
+        }
+        configs.removeAll(invalidConfigs);
+        return !configs.isEmpty();
+    }
 }

@@ -36,10 +36,16 @@ public class Router {
             return createError(405);
         }
         String leftoverUri = path.substring(route.path.length());
+        Path rootPath = Path.of(route.root).toAbsolutePath().normalize();
+        Path finalUri = rootPath.resolve(leftoverUri).toAbsolutePath().normalize();
+        if (!finalUri.startsWith(rootPath)) {
+            System.err.println("SECURITY ALERT: Path traversal attempt blocked!");
+            return createError(403);
+        }
         if (leftoverUri.startsWith("/")){
             leftoverUri = leftoverUri.substring(1);
         }
-        Path finalUri = Path.of(route.root).resolve(leftoverUri);
+        //Path finalUri = Path.of(route.root).resolve(leftoverUri);
         if (!Files.exists(finalUri)) {
             return createError(404);
         }

@@ -18,15 +18,15 @@
           "autoindex": false
         },
         {
-          "path": "/downloads",
-          "root": "/var/www/downloads",
+          "path": "/",
+          "root": "/",
           "acceptedMethods": ["GET"],
           "index": null,
           "autoindex": true
         },
         {
-          "path": "/cgi-bin",
-          "root": "/var/www/cgi-bin",
+          "path": "/",
+          "root": "/",
           "acceptedMethods": ["GET", "POST", "DELETE"],
           "cgi": {
             ".php": "/usr/bin/php-cgi",
@@ -51,7 +51,7 @@
       "routes": [
         {
           "path": "/",
-          "root": "/var/www/example",
+          "root": "/",
           "acceptedMethods": ["GET"],
           "index": "home.html",
           "autoindex": false
