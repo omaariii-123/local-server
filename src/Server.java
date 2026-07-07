@@ -6,7 +6,6 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.Set;
 
 public class Server {
@@ -60,43 +59,24 @@ public class Server {
           ServerSocketChannel server = (ServerSocketChannel) (key.channel());
 
           SocketChannel client = server.accept();
-          SocketConnection connectionContext = new SocketConnection();
+          SocketConnection connectionContext = new SocketConnection(client);
+          connectionContext.socket = client;
           client.configureBlocking(false);
           client.register(selector, SelectionKey.OP_READ, connectionContext);
 
         }
         if (key.isReadable()) {
-          SocketChannel client = (SocketChannel) key.channel();
           // we retrieve the attachmenent to get Metadata about the channel also to track
           // our progress
           SocketConnection socketConnection = (SocketConnection) key.attachment();
-          while (true) {
-            int BytesRead = client.read(socketConnection.readBuffer);
-            // int n = client.read(socketConnection.readBuffer);
-            if (BytesRead > 0) {
-              System.out.println("Client disconnected: " + client.getRemoteAddress());
-              key.channel().close();
-              key.cancel();
-              break;
-            }
-         
-          }
-          socketConnection.readBuffer.flip();
-
-          HttpRequest request;
-          while ((request = socketConnection.parser.ParseRequest(socketConnection.readBuffer) )!= null) {
-            //TODO:Routing;
-            key.interestOps(SelectionKey.OP_WRITE);
-            
-          }
-          socketConnection.readBuffer.compact();
-
-  
-
+          socketConnection.ReadingRequest(key);
+          // key.interestOps(SelectionKey.OP_WRITE);
         }
 
         if (key.isWritable()) {
-          // do the writing into the buffer
+          SocketConnection socketconnection = (SocketConnection) key.attachment();
+          socketconnection.WritingResponse(key);
+
         }
 
       }

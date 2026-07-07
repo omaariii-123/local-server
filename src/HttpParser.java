@@ -1,5 +1,4 @@
 import java.nio.ByteBuffer;
-
 import utils.RequestFsm;
 
 public class HttpParser {
@@ -8,13 +7,6 @@ public class HttpParser {
     private HttpRequest currentRequest = new HttpRequest();
     private RequestFsm state = RequestFsm.READ_METHOD;
     private Integer BodyBytes = 0;
-    // private HttpResponse response;
-
-    public void prepareForNextRequest() {
-        // this.response = null;
-        this.currentRequest = null;
-        this.state = RequestFsm.READ_METHOD;
-    }
 
     private boolean endsWithCRLF() {
         return token.length() >= 2
@@ -105,6 +97,7 @@ public class HttpParser {
                     // When all bytes are read:
                     // String KeepAlive = currentRequest.Headers.get("Connection");
                     //
+
                     if (BodyBytes == 0) {
                         state = RequestFsm.REQUEST_COMPLETE;
                     }
@@ -115,8 +108,8 @@ public class HttpParser {
                     // TODO:
                     // Notify caller the request is complete.
                     // Prepare parser for next request if using keep-alive.
-
                     HttpRequest finished = currentRequest;
+
                     reset();
                     return finished;
                 default:
@@ -131,7 +124,8 @@ public class HttpParser {
         currentRequest = new HttpRequest();
         BodyBytes = 0;
         state = RequestFsm.READ_METHOD;
-        currentHeaderName = "";
+        token.setLength(0);
+        currentHeaderName = null;
     }
 
 }

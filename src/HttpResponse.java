@@ -1,7 +1,7 @@
 import java.util.HashMap;
 
 public class HttpResponse {
-    Integer StatusCode;
+    int StatusCode;
     HashMap<String,String> Headers;
     byte[] Body;
     

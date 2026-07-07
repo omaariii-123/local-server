@@ -15,4 +15,15 @@ public class HttpRequest {
         body.write(b);
     }
 
+
+    public boolean isKeepAlive() {
+        String connection = Headers.get("Connection");
+
+        if (connection != null && connection.equals("Keep-alive")) {
+            return true;
+        }
+        return false;
+    }
+
+
 }
