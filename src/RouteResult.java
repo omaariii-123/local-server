@@ -1,0 +1,13 @@
+package src;
+
+import java.nio.file.Path;
+
+public record RouteResult(
+    Action action, 
+    int statusCode, 
+    Path resolvedPath, 
+    String contentType, 
+    String redirectUrl
+) {
+    public enum Action { SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR }
+}
