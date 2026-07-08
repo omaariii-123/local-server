@@ -69,13 +69,16 @@ public class Server {
           // we retrieve the attachmenent to get Metadata about the channel also to track
           // our progress
           SocketConnection socketConnection = (SocketConnection) key.attachment();
-          socketConnection.ReadingRequest(key);
+          // socketConnection.ReadingRequest(key);
+          socketConnection.HandlePhase(key);
+
           // key.interestOps(SelectionKey.OP_WRITE);
         }
 
         if (key.isWritable()) {
           SocketConnection socketconnection = (SocketConnection) key.attachment();
-          socketconnection.WritingResponse(key);
+          // socketconnection.WritingResponse(key);
+          socketconnection.HandlePhase(key);
 
         }
 

@@ -2,16 +2,17 @@
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
+import utils.CGIHandler;
 import utils.RouteResult;
+import utils.CGIHandler.CGIContext;
 
 public class SocketConnection {
     public enum ConnectionFsm {
@@ -25,14 +26,13 @@ public class SocketConnection {
     public ByteBuffer readBuffer = ByteBuffer.allocateDirect(8000);
     public ByteBuffer writeBuffer = ByteBuffer.allocateDirect(8000);
     public SocketChannel socket;
-
     public HttpParser parser = new HttpParser();
     public Queue<RouteResult> responses = new LinkedList<>();
-    public ConcurrentLinkedQueue<ByteBuffer> CgiBuffers = new ConcurrentLinkedQueue<>();
     public ConnectionFsm state = ConnectionFsm.READING;
     public FileChannel activeFileChannel = null;
-    public ReadableByteChannel activeCgiChannel = null;
-
+    public FileChannel activeCgiChannel = null;
+    public Process Cgiprocess = null;
+    public CGIContext CGIContext = null;
     public boolean isChunked = false;
     public boolean isKeepAlive = true;
     public boolean headersSent = false;
@@ -51,28 +51,42 @@ public class SocketConnection {
                     break;
 
                 case WRITING:
-                    if (!responses.isEmpty()) {
-                        RouteResult resp = responses.poll();
-                        prepareResponse(resp);
-                        WritingResponse(key);
-                        break;
-                    }
+                    // if (!responses.isEmpty()) {
+                    // RouteResult resp = responses.poll();
+                    // prepareResponse(resp);
+                    WritingResponse(key);
+                    break;
+                // }
 
                 case STREAMING_CGI:
-                    if (!responses.isEmpty()) {
-                        RouteResult resp = responses.poll();
-                        prepareResponse(resp);
-                        WriteChunkedResponse(key);
-                        break;
-                    }
 
+                    if (this.Cgiprocess != null) {
+
+                        if (this.activeCgiChannel == null) {
+                            if (Cgiprocess.exitValue() != 0) {
+                                // Handle Script Error
+                            }
+                            this.activeCgiChannel = FileChannel.open(CGIContext.tempFile(),
+                                    StandardOpenOption.READ);
+                            setupCgiResponseHeaders();
+                        }
+                        WriteChunkedResponse(key);
+                    } else {
+                        cleanUpCgi(key);
+                    }
                     break;
+
                 case CLOSE:
                     closeConnection(key);
                     break;
             }
-        } catch (Exception e) {
+        } catch (
 
+        Exception e) {
+            try {
+                closeConnection(key);
+            } catch (IOException ignore) {
+            }
         }
 
     }
@@ -112,7 +126,7 @@ public class SocketConnection {
 
     }
 
-    public void FormatChunk(ByteBuffer buffer) {
+    public ByteBuffer FormatChunk(ByteBuffer buffer) {
 
         int Payloadsize = buffer.remaining();
         byte[] HexByte = (String.format("%s\r\n", Integer.toHexString(Payloadsize))).getBytes();
@@ -122,7 +136,8 @@ public class SocketConnection {
         Formated.put(buffer);
         Formated.put("\r\n".getBytes());
         Formated.flip();
-        CgiBuffers.offer(Formated);
+        return Formated;
+
     }
 
     public void WriteChunkedResponse(SelectionKey key) {
@@ -130,48 +145,77 @@ public class SocketConnection {
         try {
 
             if (writeBuffer.hasRemaining()) {
-
                 socket.write(writeBuffer);
                 if (writeBuffer.hasRemaining()) {
                     // that we couldnt write the the full write buffer to the socket meaning the the
                     // is buffer is full , try on the next OP_write
                     return;
                 }
+            }
 
-                if (!writeBuffer.hasRemaining()) {
-                    ByteBuffer nextChunk = CgiBuffers.poll();
-                    if (nextChunk != null) {
-                        socket.write(nextChunk);
-                    }
-                    if (nextChunk.hasRemaining()) {
-                        writeBuffer.clear();
-                        writeBuffer.put(nextChunk);
-                        writeBuffer.flip();
-                    }
-
-                    // if (BytesRead == -1) {
-                    // this.cgiStreamFinished = true;
-                    // writeBuffer.put("\r\n".getBytes());
+            if (!writeBuffer.hasRemaining()) {
+                // ByteBuffer nextChunk = CgiBuffers.poll();
+                // if (nextChunk != null) {
+                // socket.write(nextChunk);
+                // }
+                // if (nextChunk.hasRemaining()) {
+                // writeBuffer.clear();
+                // writeBuffer.put(nextChunk);
+                // writeBuffer.flip();
+                // }
+                if (cgiStreamFinished) {
                     // activeCgiChannel.close();
                     // this.activeCgiChannel = null;
+                    // Files.deleteIfExists(this.CGIContext.tempFile());
+                    // this.CGIContext = null;
                     // this.state = ConnectionFsm.READING;
-                    // }
-                    // if (BytesRead > 0) {
-                    // writeBuffer.put(FormatChunk(rawBytesBuffer));
+                    cleanUpCgi(key);
+                    return;
 
-                    // }
-                } else if (cgiStreamFinished) {
-                    activeCgiChannel.close();
-                    this.activeCgiChannel = null;
-                    state = ConnectionFsm.READING;
-                    key.interestOps(SelectionKey.OP_READ);
-                    writeBuffer.put("\r\n".getBytes());
                 }
+                if (activeCgiChannel != null) {
+                    if (activeCgiChannel.position() < activeCgiChannel.size()) {
+                        writeBuffer.clear();
+                        activeCgiChannel.read(writeBuffer);
+                        writeBuffer.flip();
+                        ByteBuffer Formated = FormatChunk(writeBuffer);
+                        socket.write(Formated);
+                        if (Formated.hasRemaining()) {
+                            writeBuffer.clear();
+                            writeBuffer.put(Formated);
+                            writeBuffer.flip();
+                        } else {
+                            writeBuffer.clear();
+                            writeBuffer.flip();
+                        }
+                    } else {
+                        // cleanUpAfterResponse(key);
+                        writeBuffer.clear();
+                        writeBuffer.put("0\r\n\r\n".getBytes());
+                        writeBuffer.flip();
+                        socket.write(writeBuffer);
+                        this.cgiStreamFinished = true;
 
+                    }
+                }
+                // if (BytesRead == -1) {
+                // this.cgiStreamFinished = true;
+                // writeBuffer.put("\r\n".getBytes());
+                // activeCgiChannel.close();
+                // this.activeCgiChannel = null;
+                // this.state = ConnectionFsm.READING;
+                // }
+                // if (BytesRead > 0) {
+                // writeBuffer.put(FormatChunk(rawBytesBuffer));
+
+                // }
             }
 
         } catch (Exception e) {
-            // TODO: handle exception
+            try {
+                closeConnection(key);
+            } catch (IOException ignore) {
+            }
         }
 
     }
@@ -180,7 +224,7 @@ public class SocketConnection {
         if (!writeBuffer.hasRemaining() && !headersSent) {
             if (!responses.isEmpty()) {
                 RouteResult resp = responses.poll();
-                prepareResponse(resp);
+                prepareResponse(resp, key);
                 headersSent = true;
 
             } else {
@@ -189,7 +233,7 @@ public class SocketConnection {
             }
         }
 
-        // drainign the buffer first to os thread making room
+        // draining the buffer first to os thread making room for new bytes
         if (writeBuffer.hasRemaining()) {
             socket.write(writeBuffer);
         }
@@ -209,9 +253,6 @@ public class SocketConnection {
                 } else {
                     cleanUpAfterResponse(key);
                 }
-            } else if (isChunked && activeCgiChannel != null) {
-                state = ConnectionFsm.STREAMING_CGI;
-
             } else {
                 cleanUpAfterResponse(key);
             }
@@ -220,16 +261,7 @@ public class SocketConnection {
 
     }
 
-    // public void WriteChunkedResponse(SelectionKey key) throws IOException {
-    // if (!writeBuffer.hasRemaining()) {
-    // int Bytesize = writeBuffer.limit();
-    // String chunkedWrite = Integer.toHexString(Bytesize) + "\r\n";
-
-    // }
-
-    // }
-
-    private void prepareResponse(RouteResult result) throws IOException {
+    private void prepareResponse(RouteResult result, SelectionKey key) throws IOException {
         StringBuilder headers = new StringBuilder();
 
         switch (result.action()) {
@@ -291,10 +323,24 @@ public class SocketConnection {
                 headers.append("HTTP/1.1 200 OK\r\n")
                         .append("Transfer-Encoding: chunked\r\n\r\n");
                 this.isChunked = true;
-                // this.activeCgiChannel = Channels.newChannel(process.getInputStream());
+                // this.activeCgiChannel = FileChannel.open(CGIContext.tempFile().getRoot(),
+                CGIHandler cgiHandler = new CGIHandler();
+                this.CGIContext = cgiHandler.execute(result.resolvedPath(), "/", "GET", "python");
+                this.Cgiprocess = CGIContext.process();
+                this.state = ConnectionFsm.STREAMING_CGI;
+                key.interestOps(0);
+                final Selector currentSector = key.selector();
+                // when the process it about to do we added a callback to wakeup the selector
+                // and switch for OP_write so we dont w8 for the scipt bieng processed instead
+                // we do another operation until the process it dead meaning we have the full
+                // output ready to stream it
+                Cgiprocess.onExit().thenAccept(p -> {
+                    key.interestOps(SelectionKey.OP_WRITE);
+                    currentSector.wakeup();
+                });
 
                 writeBuffer.clear();
-                writeBuffer.put(headers.toString().getBytes());
+                // writeBuffer.put(headers.toString().getBytes());
                 writeBuffer.flip();
                 break;
 
@@ -316,10 +362,67 @@ public class SocketConnection {
         }
     }
 
+    private void cleanUpCgi(SelectionKey key) throws IOException {
+        if (activeCgiChannel != null) {
+            activeCgiChannel.close();
+            activeCgiChannel = null;
+        }
+        this.headersSent = false;
+        this.cgiStreamFinished = false;
+        this.Cgiprocess = null;
+        Files.deleteIfExists(this.CGIContext.tempFile());
+        this.CGIContext = null;
+        cleanUpAfterResponse(key);
+
+    }
+
     private void closeConnection(SelectionKey key) throws IOException {
         if (activeFileChannel != null)
             activeFileChannel.close();
         socket.close();
         key.cancel();
+    }
+
+    private void setupCgiResponseHeaders() throws IOException {
+        // Read the beginning of the file to scrape out custom script headers
+        ByteBuffer headerBuffer = ByteBuffer.allocate(2048);
+        activeCgiChannel.read(headerBuffer);
+        headerBuffer.flip();
+
+        byte[] bytes = new byte[headerBuffer.remaining()];
+        headerBuffer.get(bytes);
+        String fileContent = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+
+        // Search for the HTTP newline delimiter sequence splitting headers from body
+        int delimiterIdx = fileContent.indexOf("\r\n\r\n");
+        int delimiterLen = 4;
+        if (delimiterIdx == -1) {
+            delimiterIdx = fileContent.indexOf("\n\n");
+            delimiterLen = 2;
+        }
+
+        StringBuilder responseEnvelope = new StringBuilder();
+        responseEnvelope.append("HTTP/1.1 200 OK\r\n")
+                .append("Transfer-Encoding: chunked\r\n");
+
+        if (delimiterIdx != -1) {
+            // Strip headers off the file content block and append them
+            String cgiHeaders = fileContent.substring(0, delimiterIdx);
+            responseEnvelope.append(cgiHeaders).append("\r\n\r\n");
+
+            // Advance the File pointer past the headers directly to the start of raw body
+            // payload
+            activeCgiChannel.position(delimiterIdx + delimiterLen);
+        } else {
+            // Fallback if script output lacks standard headers
+            responseEnvelope.append("\r\n");
+            activeCgiChannel.position(0);
+        }
+
+        // Load the final unified header into the network write buffer
+        writeBuffer.clear();
+        writeBuffer.put(responseEnvelope.toString().getBytes());
+        writeBuffer.flip();
+        this.headersSent = true;
     }
 }
