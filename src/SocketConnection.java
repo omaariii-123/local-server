@@ -21,8 +21,8 @@ public class SocketConnection {
 
     }
 
-    private final Integer TIMEOUT_MS = 30000;
     private long lastActiveTime = System.currentTimeMillis();
+    private final Integer TIMEOUT_MS = 30000;
     public ByteBuffer readBuffer = ByteBuffer.allocateDirect(8000);
     public ByteBuffer writeBuffer = ByteBuffer.allocateDirect(8000);
     public SocketChannel socket;
@@ -103,6 +103,7 @@ public class SocketConnection {
                 break;
             }
 
+            UpdateTimeout();
         }
         readBuffer.flip();
         HttpRequest request;
@@ -115,7 +116,6 @@ public class SocketConnection {
             System.out.print(request.toString());
             state = ConnectionFsm.WRITING;
             key.interestOps(SelectionKey.OP_WRITE);
-            UpdateTimeout();
         }
         readBuffer.compact();
 
@@ -305,8 +305,8 @@ public class SocketConnection {
                 // this.activeCgiChannel = FileChannel.open(CGIContext.tempFile().getRoot(),
                 // this.CGIContext = cgiHandler.execute(result.resolvedPath(), "/", "GET",
                 // "python");
-                // this.Cgiprocess = result.
                 this.CGIContext = result.cgiContext();
+                this.Cgiprocess = result.cgiContext().process();
                 this.state = ConnectionFsm.STREAMING_CGI;
                 key.interestOps(0);
                 final Selector currentSector = key.selector();
@@ -360,8 +360,19 @@ public class SocketConnection {
     }
 
     private void closeConnection(SelectionKey key) throws IOException {
-        if (activeFileChannel != null)
+        if (activeFileChannel != null) {
             activeFileChannel.close();
+        }
+        if (Cgiprocess != null && Cgiprocess.isAlive()) {
+            Cgiprocess.destroy();
+        }
+        if (activeCgiChannel != null) {
+            activeCgiChannel.close();
+        }
+        if (CGIContext != null) {
+            Files.deleteIfExists(this.CGIContext.tempFile());
+        }
+
         socket.close();
         key.cancel();
     }
@@ -401,7 +412,7 @@ public class SocketConnection {
     }
 
     public void CheckTimeout(SelectionKey key) throws IOException {
-        if (TIMEOUT_MS - this.lastActiveTime > 0) {
+        if (TIMEOUT_MS >= System.currentTimeMillis() - this.lastActiveTime) {
             System.out.println("Client timed out");
             closeConnection(key);
         }
