@@ -27,10 +27,20 @@ public class Router {
                 null,
                 null);
         }
+        
         String path = request.requestLine.getPath();
         Route  route = extract(server.routes, path);
         if (route == null) {
             return createError(404);
+        }
+        if (route.redirection != null) {
+            return new RouteResult(
+                RouteResult.Action.REDIRECT,
+                route.redirection.values.get("code") instanceof JsonNumber n ? n.value : 302,
+                Path.of(route.redirection.values.get("url").toString()),
+                "text/html",
+                null,
+                null);
         }
         if (!route.acceptedMethods.contains(request.requestLine.method)){
             return createError(405);
@@ -42,6 +52,7 @@ public class Router {
             System.err.println("SECURITY ALERT: Path traversal attempt blocked!");
             return createError(403);
         }
+        
         if (leftoverUri.startsWith("/")){
             leftoverUri = leftoverUri.substring(1);
         }

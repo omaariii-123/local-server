@@ -8,6 +8,7 @@ public class Route {
     public String root;
     public List<String> acceptedMethods;
     public boolean autoindex = false;
+    public JsonObject redirection;
     private Route(){}
     public static Route hydrate(JsonObject node) {
         Route route = new Route();       
@@ -15,6 +16,7 @@ public class Route {
         route.root = extract(node, "root");
         route.autoindex = extract(node, "autoindex", false);
         route.acceptedMethods = extract(node, new JsonString("acceptedMethods"));
+        route.redirection = extractObj(node, "redirection");
         return route;
     }
     public static String extract(JsonObject node, String key){
@@ -41,5 +43,12 @@ public class Route {
             });
         }
         return methods;
+    }
+    public static JsonObject extractObj(JsonObject node, String key){
+        JsonElement str = node.values.get(key);
+        if (str instanceof JsonObject obj){
+            return obj;
+        }
+        return null;
     }
 }

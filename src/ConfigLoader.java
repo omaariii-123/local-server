@@ -61,11 +61,10 @@ class ConfigLoader {
 
 		dummyRequest.requestLine = new RequestLine();
 		dummyRequest.requestLine.setMethod("GET");
-		dummyRequest.requestLine.setPath("/scripts/script.py");
+		dummyRequest.requestLine.setPath("/old-blog");
 		dummyRequest.Headers = new HashMap<>();
 		dummyRequest.Headers.put("host", "localhost:8080");
 		System.err.println(r.handle(dummyRequest, list));
-		System.err.println(list.get(0).routes.get(0).acceptedMethods);
 		return list;
 	}
 	private boolean validate(List<ServerConfig> configs) {
