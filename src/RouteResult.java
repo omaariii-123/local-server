@@ -10,5 +10,5 @@ public record RouteResult(
     String redirectUrl,
     CGIHandler.CGIContext cgiContext
 ) {
-    public enum Action { SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR }
+    public enum Action { SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR, DELETE_FILE }
 }

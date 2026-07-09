@@ -42,9 +42,10 @@ public class Router {
                 null,
                 null);
         }
-        if (!route.acceptedMethods.contains(request.requestLine.method)){
+        String method = request.requestLine.method;
+        if (!route.acceptedMethods.contains(method)) {
             return createError(405);
-        }
+        }       
         String leftoverUri = path.substring(route.path.length());
         Path rootPath = Path.of(route.root).toAbsolutePath().normalize();
         Path finalUri = rootPath.resolve(leftoverUri).toAbsolutePath().normalize();
@@ -52,13 +53,76 @@ public class Router {
             System.err.println("SECURITY ALERT: Path traversal attempt blocked!");
             return createError(403);
         }
-        
+        if (method.equals("POST") || method.equals("PUT") || method.equals("PATCH")) {
+            
+            boolean hasContentLength = request.Headers.containsKey("content-length");
+            boolean isChunked = "chunked".equalsIgnoreCase(request.Headers.get("transfer-encoding"));
+
+            if (!hasContentLength && !isChunked) {
+                return createError(411);
+            }
+            if (hasContentLength) {
+                try {
+                    long contentLength = Long.parseLong(request.Headers.get("content-length"));
+                    if (contentLength > server.clientMaxBodySize) {
+                        return createError(413);
+                    }
+                } catch (NumberFormatException e) {
+                    return createError(400);
+                }
+            }
+            try {
+                if (request.body != null && request.body.size() > 0) {
+                    
+                    if (!Files.exists(finalUri.getParent())) {
+                        Files.createDirectories(finalUri.getParent());
+                    }
+                    Files.write(finalUri, request.body.toByteArray());                    
+                    return new RouteResult(
+                        RouteResult.Action.SERVE_FILE, 
+                        201, 
+                        finalUri, 
+                        "text/plain", 
+                        null, 
+                        null);
+                } 
+                else if (isChunked) {
+                    return new RouteResult(
+                        RouteResult.Action.SERVE_FILE, 
+                        202, 
+                        finalUri, 
+                        "text/plain", 
+                        null, 
+                        null);
+                } 
+                else {
+                    return createError(400);
+                }
+            } catch (IOException e) {
+                return createError(500);
+            }
+        }
         if (leftoverUri.startsWith("/")){
             leftoverUri = leftoverUri.substring(1);
         }
         //Path finalUri = Path.of(route.root).resolve(leftoverUri);
         if (!Files.exists(finalUri)) {
             return createError(404);
+        }
+        if (method.equals("DELETE")) {
+            try {
+                Files.delete(finalUri);
+                return new RouteResult(
+                    RouteResult.Action.DELETE_FILE,
+                    200,
+                    null,
+                    getMimeType(finalUri),
+                    null,
+                    null);
+            } catch (IOException e) {
+                System.err.println("Failed to delete file: " + e.getMessage());
+                return createError(500);
+            }
         }
         if (Files.isDirectory(finalUri)){
             Path indexPath = finalUri.resolve("index.html");          

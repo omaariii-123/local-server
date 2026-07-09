@@ -7,7 +7,7 @@ public class HttpRequest {
 
     public HashMap<String, String> Headers = new HashMap<>();
     public RequestLine requestLine;
-    private ByteArrayOutputStream body = new ByteArrayOutputStream();
+    public ByteArrayOutputStream body = new ByteArrayOutputStream();
 
 public void appendToBody(byte b) {
     body.write(b);
