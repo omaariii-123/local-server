@@ -10,7 +10,7 @@ public class Router {
 
     private record Target(String host, int port) {
     };
-
+    private final SessionManager sessionManager = new SessionManager();
     private Target target;
     private ServerConfig server;
     public int urlIndex = 0;
@@ -25,7 +25,9 @@ public class Router {
                 null,
                 "text/plain",
                 null,
-                null);
+                null,
+                null
+            );
         }
         
         String path = request.requestLine.getPath();
@@ -40,7 +42,30 @@ public class Router {
                 Path.of(route.redirection.values.get("url").toString()),
                 "text/html",
                 null,
-                null);
+                null,
+                null
+            );
+        }
+        String cookieHeader = null;
+        String rawCookie = request.Headers.get("cookie");
+        boolean isKnownUser = false;
+
+        if (rawCookie != null && rawCookie.contains("session_id=")) {
+            try {
+                String sessionId = rawCookie.split("session_id=")[1].split(";")[0];
+                if (sessionManager.isValidSession(sessionId)) {
+                    isKnownUser = true;
+                    System.out.println("DEBUG: Recognized returning user with ID: " + sessionId);
+                }
+            } catch (Exception e) {
+                // Ignore malformed cookies
+            }
+        }
+
+        if (!isKnownUser) {
+            String newSessionId = sessionManager.createSession();
+            cookieHeader = "session_id=" + newSessionId + "; HttpOnly; Path=/";
+            System.out.println("DEBUG: Issued new session cookie: " + newSessionId);
         }
         String method = request.requestLine.method;
         if (!route.acceptedMethods.contains(method)) {
@@ -84,7 +109,8 @@ public class Router {
                         finalUri, 
                         "text/plain", 
                         null, 
-                        null);
+                        null,
+                        cookieHeader);
                 } 
                 else if (isChunked) {
                     return new RouteResult(
@@ -93,7 +119,8 @@ public class Router {
                         finalUri, 
                         "text/plain", 
                         null, 
-                        null);
+                        null,
+                        cookieHeader);
                 } 
                 else {
                     return createError(400);
@@ -105,7 +132,6 @@ public class Router {
         if (leftoverUri.startsWith("/")){
             leftoverUri = leftoverUri.substring(1);
         }
-        //Path finalUri = Path.of(route.root).resolve(leftoverUri);
         if (!Files.exists(finalUri)) {
             return createError(404);
         }
@@ -118,14 +144,16 @@ public class Router {
                     null,
                     getMimeType(finalUri),
                     null,
-                    null);
+                    null,
+                    cookieHeader);
             } catch (IOException e) {
                 System.err.println("Failed to delete file: " + e.getMessage());
                 return createError(500);
             }
         }
         if (Files.isDirectory(finalUri)){
-            Path indexPath = finalUri.resolve("index.html");          
+            String defaultFile = route.defaultFile != null ? route.defaultFile : "index.html";
+            Path indexPath = finalUri.resolve(defaultFile);          
             if (Files.exists(indexPath)) {
                 finalUri = indexPath;
             } else {
@@ -136,22 +164,28 @@ public class Router {
                         finalUri,
                         "text/html",
                         null,
-                        null);
+                        null,
+                        cookieHeader);
                 } else {
                     return createError(403);
                 }
             }
         }
         String fileName = finalUri.getFileName().toString();        
-        if (fileName.endsWith(".py")) {
+        String extension = "";
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            extension = fileName.substring(dotIndex);
+        }
+        if (route.cgi != null && route.cgi.containsKey(extension)) {
+            String executablePath = route.cgi.get(extension);
             try {
                 CGIHandler cgiHandler = new CGIHandler();
-                
                 CGIHandler.CGIContext context = cgiHandler.execute(
                     finalUri, 
                     leftoverUri, 
                     request.requestLine.method, 
-                    "/usr/bin/python3" 
+                    executablePath
                 );
                 
                 return new RouteResult(
@@ -160,7 +194,8 @@ public class Router {
                     context.tempFile(), 
                     "text/html", 
                     null, 
-                    context
+                    context,
+                    cookieHeader
                 );
                 
             } catch (IOException e) {
@@ -174,7 +209,8 @@ public class Router {
             finalUri, 
             getMimeType(finalUri), 
             null, 
-            null);
+            null,
+            cookieHeader);
     }
     private String getMimeType(Path path) {
         try {
@@ -185,15 +221,22 @@ public class Router {
         }
     }
     private RouteResult createError(int statusCode) {
+        String customPagePath = server.errorPages.get(String.valueOf(statusCode));
+        Path errorPath = null;
+        if (customPagePath != null) {
+            errorPath = Path.of(customPagePath);
+        }
         return new RouteResult(
             RouteResult.Action.ERROR, 
             statusCode, 
-            Path.of(server.errorPages.get(String.valueOf(statusCode))), 
+            errorPath, 
             "text/html", 
             null,
+            null,
             null
-    );
-}    public Target extract(String input) {
+        );
+    }
+        public Target extract(String input) {
         if (input == null) return null;
         String[] parts = input.split(":");
         String host = parts[0];
@@ -207,7 +250,26 @@ public class Router {
         return list.stream().filter((r)-> {return path.startsWith(r.path);}).max(Comparator.comparingInt((r) -> r.path.length())).orElse(null);
     }
 
-    public ServerConfig findMatchedServer(List<ServerConfig> list) {
-        return list.stream().filter((x) -> {return x.host.equals(target.host()) && x.ports.contains(target.port());}).findFirst().orElse(null);
+   public ServerConfig findMatchedServer(List<ServerConfig> list) {
+        ServerConfig exactMatch = list.stream()
+                .filter(x -> x.host.equals(target.host()) && x.ports.contains(target.port()))
+                .findFirst()
+                .orElse(null);
+
+        if (exactMatch != null) {
+            return exactMatch;
+        }
+        ServerConfig defaultMatch = list.stream()
+                .filter(x -> x.ports.contains(target.port()) && x.isDefaultServer)
+                .findFirst()
+                .orElse(null);
+
+        if (defaultMatch != null) {
+            return defaultMatch;
+        }
+        return list.stream()
+                .filter(x -> x.ports.contains(target.port()))
+                .findFirst()
+                .orElse(null);
     }
 }

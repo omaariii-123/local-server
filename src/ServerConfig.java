@@ -15,7 +15,7 @@ public class ServerConfig {
 
 	public void hydrate(JsonObject obj) {
 		this.host = Route.extract(obj, "host");
-		this.clientMaxBodySize = extractNumbers(obj, "clientMaxBodySize").get(0);
+		this.clientMaxBodySize = extractNumbers(obj, "clientMaxBodySize").stream().findFirst().orElse(0);
 		this.isDefaultServer = Route.extract(obj, "isDefaultServer", false);
 		this.ports = extractNumbers(obj, "ports");
 		this.routes = new ArrayList<>();
@@ -28,7 +28,7 @@ public class ServerConfig {
 		}
 		this.errorPages = extract(obj, "errorPages");
 	}
-	private  Map<String, String> extract(JsonObject node, String key){
+	public Map<String, String> extract(JsonObject node, String key){
 		Map<String,String> map = new HashMap<>();
 		if(node.values.get(key) instanceof JsonObject o){
 			o.values.forEach((k, value)->{

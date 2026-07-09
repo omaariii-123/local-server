@@ -2,6 +2,7 @@ package src;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class Route {
     public String path;
@@ -9,6 +10,8 @@ public class Route {
     public List<String> acceptedMethods;
     public boolean autoindex = false;
     public JsonObject redirection;
+	public Map<String, String> cgi;
+    String defaultFile;
     private Route(){}
     public static Route hydrate(JsonObject node) {
         Route route = new Route();       
@@ -17,6 +20,8 @@ public class Route {
         route.autoindex = extract(node, "autoindex", false);
         route.acceptedMethods = extract(node, new JsonString("acceptedMethods"));
         route.redirection = extractObj(node, "redirection");
+        route.cgi = new ServerConfig().extract(node, "cgi");
+        route.defaultFile = extract(node, "defaultFile");
         return route;
     }
     public static String extract(JsonObject node, String key){

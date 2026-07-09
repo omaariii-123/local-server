@@ -8,7 +8,8 @@ public record RouteResult(
     Path resolvedPath, 
     String contentType, 
     String redirectUrl,
-    CGIHandler.CGIContext cgiContext
+    CGIHandler.CGIContext cgiContext,
+    String cookieHeader
 ) {
     public enum Action { SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR, DELETE_FILE }
 }
