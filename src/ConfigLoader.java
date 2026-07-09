@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.io.ByteArrayOutputStream;
 
 class ConfigLoader {
 	private final String filePath;
@@ -60,10 +61,18 @@ class ConfigLoader {
 		HttpRequest dummyRequest = new HttpRequest();
 
 		dummyRequest.requestLine = new RequestLine();
-		dummyRequest.requestLine.setMethod("GET");
-		dummyRequest.requestLine.setPath("/old-blog");
+		dummyRequest.requestLine.setMethod("POST");
+		dummyRequest.requestLine.setPath("/script/test.py");
 		dummyRequest.Headers = new HashMap<>();
 		dummyRequest.Headers.put("host", "localhost:8080");
+		dummyRequest.Headers.put("content-length", "5");
+		dummyRequest.body = new ByteArrayOutputStream();
+		try {
+			dummyRequest.body.write("hello".getBytes());
+		} catch (Exception e) {
+			System.err.println("Error writing to dummy request body: " + e.getMessage());
+		}
+
 		System.err.println(r.handle(dummyRequest, list));
 		return list;
 	}

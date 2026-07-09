@@ -7,7 +7,10 @@
       "errorPages": {
         "404": "/var/www/errors/404.html",
         "403": "/var/www/errors/403.html",
-        "500": "/var/www/errors/500.html"
+        "500": "/var/www/errors/500.html",
+        "411": "/var/www/errors/411.html",
+        "413": "/var/www/errors/413.html",
+        "400": "/var/www/errors/400.html"
       },
       "routes": [
         {
