@@ -8,13 +8,14 @@ public record RouteResult(
         int statusCode,
         Path resolvedPath,
         String contentType,
-        String redirectUrl) {
+        String redirectUrl,
+        CGIHandler.CGIContext cgiContext) {
     public enum Action {
         SERVE_FILE, DIRECTORY_LISTING, EXECUTE_CGI, REDIRECT, ERROR
     }
 
     static RouteResult route(HttpRequest req, ConfigLoader conf) {
-        return new RouteResult(null, 0, null, null, null);
+        return new RouteResult(null, 0, null, null, null, null);
     }
 
 }
