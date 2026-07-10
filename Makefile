@@ -2,7 +2,7 @@ JAVAC = javac
 JAVA = java
 SRC_DIR = src
 BIN_DIR = bin
-MAIN_CLASS = src.Main
+MAIN_CLASS = Main
 
 all: clean build run
 

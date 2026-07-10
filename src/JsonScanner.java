@@ -1,5 +1,66 @@
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+interface JsonElement { }
+
+ class JsonObject implements JsonElement {
+    public final Map<String, JsonElement> values = new HashMap<>();
+    @Override
+    public String toString() {
+        // This will automatically call the toString() of every element inside!
+        return values.toString(); 
+    }
+}
+
+ class JsonArray implements JsonElement {
+    public final List<JsonElement> elements = new ArrayList<>();
+    @Override
+    public String toString() {
+        // This will automatically call the toString() of every element inside!
+        return elements.toString(); 
+    }
+}
+
+class JsonString implements JsonElement {
+    public final String value;
+    public JsonString(String value) { this.value = value; }
+    @Override
+    public String toString() {
+       
+        return "\"" + value + "\""; // Adds quotes back for visualization
+    }
+}
+class JsonNull implements JsonElement{
+     @Override
+    public String toString() {
+        return "null";
+    }
+}
+class JsonBoolean implements JsonElement{
+    public final boolean value;
+    public JsonBoolean(boolean bool){
+        this.value = bool;
+    }
+    @Override
+    public String toString() {
+        if (this.value){
+            return "true";
+        }
+        return "false";
+    }
+}
+
+class JsonNumber implements JsonElement{
+    public final int value;
+    public JsonNumber(int num){
+        this.value = num;
+    }
+    @Override
+    public String toString() {
+        return String.valueOf(value);
+    }
+}
 
 public class JsonScanner {
     private final String input;
@@ -32,7 +93,7 @@ public class JsonScanner {
     }
 
     private boolean isAlpha(char c) {
-        return c >= 'a' && c <= 'z'; // JSON only uses lowercase for true/false/null
+        return c >= 'a' && c <= 'z' ; // JSON only uses lowercase for true/false/null
     }
     private void string(){
         while(peek() != '"' && !isAtEnd()){
@@ -65,19 +126,12 @@ public class JsonScanner {
         }
 
         String text = input.substring(start, current);
-                switch (text) {
-            case "true":
-                tokens.add(new Token(TokenType.TRUE, text));
-                break;
-            case "false":
-                tokens.add(new Token(TokenType.FALSE, text));
-                break;
-            case "null":
-                tokens.add(new Token(TokenType.NULL, text));
-                break;
-            default:
-                throw new RuntimeException("Unexpected keyword: " + text);
-        }
+            switch (text) {
+                case "true" -> tokens.add(new Token(TokenType.TRUE, text));
+                case "false" -> tokens.add(new Token(TokenType.FALSE, text));
+                case "null" -> tokens.add(new Token(TokenType.NULL, text));
+                default -> throw new RuntimeException("Unexpected keyword: " + text);
+            }
     }
     private char peek(){
         if (isAtEnd()) return '\0';
@@ -89,42 +143,24 @@ public class JsonScanner {
     }
     private void scanToken(){
         char c = this.advance();
-        switch (c) {
-            case '{':
-                addToken(TokenType.LEFT_BRACE);
-                break;
-            case '}':
-                addToken(TokenType.RIGHT_BRACE);
-                break;
-            case '[':
-                addToken(TokenType.LEFT_BRACKET);
-                break;
-            case ']':
-                addToken(TokenType.RIGHT_BRACKET);
-                break;
-            case ':':
-                addToken(TokenType.COLON);
-                break;
-            case ',':
-                addToken(TokenType.COMMA);
-                break;
-            case '"':
-                string();
-                break;
-                case ' ':
-            case '\r':
-            case '\t':
-            case '\n':
-                break;
-            default:
-                if (isDigit(c) || c == '-'){
+    switch (c) {
+        case '{' -> addToken(TokenType.LEFT_BRACE);
+        case '}' -> addToken(TokenType.RIGHT_BRACE);
+        case '[' -> addToken(TokenType.LEFT_BRACKET);
+        case ']' -> addToken(TokenType.RIGHT_BRACKET);
+        case ':' -> addToken(TokenType.COLON);
+        case ',' -> addToken(TokenType.COMMA);
+        case '"' -> string();
+        case ' ', '\r', '\t', '\n' -> {}        
+        default -> {
+                if (isDigit(c) || c == '-') {
                     number();   
-                }else if ( isAlpha(c)){
+                } else if (isAlpha(c)) {
                     keyword();
-                }else {
+                } else {
                     throw new RuntimeException("Unexpected character: " + c);
                 }
-                break;
+            }
         }
     }
 }

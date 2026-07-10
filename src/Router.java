@@ -16,7 +16,11 @@ public class Router {
     public int urlIndex = 0;
 
     public RouteResult handle(HttpRequest request, List<ServerConfig> serverConfigs) {
-        target = extract(request.Headers.get("host"));
+        return handle(request, serverConfigs, 80);
+    }
+
+    public RouteResult handle(HttpRequest request, List<ServerConfig> serverConfigs, int defaultPort) {
+        target = extract(request.Headers.get("host"), defaultPort);
         server = findMatchedServer(serverConfigs);
         if (server == null) {
             return new RouteResult(
@@ -26,7 +30,7 @@ public class Router {
                     "text/plain",
                     null,
                     null,
-                    null);
+                    null, null);
         }
 
         String path = request.requestLine.getPath();
@@ -38,11 +42,11 @@ public class Router {
             return new RouteResult(
                     RouteResult.Action.REDIRECT,
                     route.redirection.values.get("code") instanceof JsonNumber n ? n.value : 302,
-                    Path.of(route.redirection.values.get("url").toString()),
+                    null,
                     "text/html",
+                    route.redirection.values.get("url") instanceof JsonString s ? s.value : route.redirection.values.get("url").toString(),
                     null,
-                    null,
-                    null);
+                    null, path);
         }
         String cookieHeader = null;
         String rawCookie = request.Headers.get("cookie");
@@ -70,6 +74,9 @@ public class Router {
             return createError(405);
         }
         String leftoverUri = path.substring(route.path.length());
+        if (leftoverUri.startsWith("/")) {
+            leftoverUri = leftoverUri.substring(1);
+        }
         Path rootPath = Path.of(route.root).toAbsolutePath().normalize();
         Path finalUri = rootPath.resolve(leftoverUri).toAbsolutePath().normalize();
         if (!finalUri.startsWith(rootPath)) {
@@ -80,6 +87,8 @@ public class Router {
 
             boolean hasContentLength = request.Headers.containsKey("content-length");
             boolean isChunked = "chunked".equalsIgnoreCase(request.Headers.get("transfer-encoding"));
+            boolean isMultipart = request.Headers.get("content-type") != null
+                    && request.Headers.get("content-type").startsWith("multipart/form-data");
 
             if (!hasContentLength && !isChunked) {
                 return createError(411);
@@ -96,20 +105,44 @@ public class Router {
             }
             try {
                 if (request.body != null && request.body.size() > 0) {
+                    Path targetPath = finalUri;
+                    byte[] payload = request.body.toByteArray();
 
-                    if (!Files.exists(finalUri.getParent())) {
-                        Files.createDirectories(finalUri.getParent());
+                    if (Files.isDirectory(finalUri)) {
+                        String uploadFileName = isMultipart ? extractMultipartFileName(payload) : null;
+                        if (uploadFileName == null || uploadFileName.isBlank()) {
+                            uploadFileName = "upload.bin";
+                        }
+                        targetPath = finalUri.resolve(uploadFileName).normalize();
                     }
-                    Files.write(finalUri, request.body.toByteArray());
+
+                    if (!Files.exists(targetPath.getParent())) {
+                        Files.createDirectories(targetPath.getParent());
+                    }
+
+                    if (isMultipart) {
+                        payload = extractMultipartPayload(payload);
+                    }
+
+                    Files.write(targetPath, payload);
+
                     return new RouteResult(
                             RouteResult.Action.SERVE_FILE,
                             201,
-                            finalUri,
+                            targetPath,
                             "text/plain",
                             null,
                             null,
-                            cookieHeader);
+                            cookieHeader,
+                            path);
                 } else if (isChunked) {
+                    if (Files.isDirectory(finalUri)) {
+                        finalUri = finalUri.resolve("upload.bin").normalize();
+                    }
+                    if (!Files.exists(finalUri.getParent())) {
+                        Files.createDirectories(finalUri.getParent());
+                    }
+                    Files.write(finalUri, new byte[0]);
                     return new RouteResult(
                             RouteResult.Action.SERVE_FILE,
                             202,
@@ -117,16 +150,14 @@ public class Router {
                             "text/plain",
                             null,
                             null,
-                            cookieHeader);
+                            cookieHeader,
+                            path);
                 } else {
                     return createError(400);
                 }
             } catch (IOException e) {
                 return createError(500);
             }
-        }
-        if (leftoverUri.startsWith("/")) {
-            leftoverUri = leftoverUri.substring(1);
         }
         if (!Files.exists(finalUri)) {
             return createError(404);
@@ -141,7 +172,8 @@ public class Router {
                         getMimeType(finalUri),
                         null,
                         null,
-                        cookieHeader);
+                        cookieHeader,
+                        path);
             } catch (IOException e) {
                 System.err.println("Failed to delete file: " + e.getMessage());
                 return createError(500);
@@ -161,7 +193,8 @@ public class Router {
                             "text/html",
                             null,
                             null,
-                            cookieHeader);
+                            cookieHeader, path);
+
                 } else {
                     return createError(403);
                 }
@@ -190,7 +223,7 @@ public class Router {
                         "text/html",
                         null,
                         context,
-                        cookieHeader);
+                        cookieHeader, path);
 
             } catch (IOException e) {
                 System.err.println("CGI Execution failed: " + e.getMessage());
@@ -204,7 +237,7 @@ public class Router {
                 getMimeType(finalUri),
                 null,
                 null,
-                cookieHeader);
+                cookieHeader, path);
     }
 
     private String getMimeType(Path path) {
@@ -229,19 +262,67 @@ public class Router {
                 "text/html",
                 null,
                 null,
-                null);
+                null, null);
+    }
+
+    public Target extract(String input, int defaultPort) {
+        if (input == null)
+            return null;
+        String host = input;
+        int port = defaultPort;
+        if (input.startsWith("[") && input.contains("]")) {
+            int closingBracket = input.indexOf(']');
+            host = input.substring(1, closingBracket);
+            if (closingBracket + 1 < input.length() && input.charAt(closingBracket + 1) == ':') {
+                port = Integer.parseInt(input.substring(closingBracket + 2));
+            }
+            return new Target(host, port);
+        }
+        int lastColon = input.lastIndexOf(':');
+        if (lastColon > -1) {
+            try {
+                port = Integer.parseInt(input.substring(lastColon + 1));
+                host = input.substring(0, lastColon);
+            } catch (NumberFormatException ignored) {
+                host = input;
+            }
+        }
+        return new Target(host, port);
     }
 
     public Target extract(String input) {
-        if (input == null)
+        return extract(input, 80);
+    }
+
+    private String extractMultipartFileName(byte[] body) {
+        String text = new String(body, java.nio.charset.StandardCharsets.ISO_8859_1);
+        int index = text.indexOf("filename=");
+        if (index == -1) {
             return null;
-        String[] parts = input.split(":");
-        String host = parts[0];
-        int port = 80;
-        if (parts.length > 1) {
-            port = Integer.parseInt(parts[1]);
         }
-        return new Target(host, port);
+        int startQuote = text.indexOf('"', index);
+        if (startQuote == -1) {
+            return null;
+        }
+        int endQuote = text.indexOf('"', startQuote + 1);
+        if (endQuote == -1) {
+            return null;
+        }
+        return text.substring(startQuote + 1, endQuote);
+    }
+
+    private byte[] extractMultipartPayload(byte[] body) {
+        String text = new String(body, java.nio.charset.StandardCharsets.ISO_8859_1);
+        int payloadStart = text.indexOf("\r\n\r\n");
+        if (payloadStart == -1) {
+            return body;
+        }
+        payloadStart += 4;
+        int payloadEnd = text.lastIndexOf("\r\n--");
+        if (payloadEnd == -1 || payloadEnd < payloadStart) {
+            payloadEnd = body.length;
+        }
+        return text.substring(payloadStart, payloadEnd).getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
     }
 
     public Route extract(List<Route> list, String path) {

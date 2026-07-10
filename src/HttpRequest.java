@@ -5,7 +5,7 @@ public class HttpRequest {
 
     public HashMap<String, String> Headers = new HashMap<>();
     public ByteArrayOutputStream body = new ByteArrayOutputStream();
-    RequestLine requestLine;
+    RequestLine requestLine = new RequestLine();
 
     public boolean HasBody() {
         return this.body.size() != 0;
@@ -16,9 +16,9 @@ public class HttpRequest {
     }
 
     public boolean isKeepAlive() {
-        String connection = Headers.get("Connection");
+        String connection = Headers.get("connection");
 
-        if (connection != null && connection.equals("Keep-alive")) {
+        if (connection != null && connection.equalsIgnoreCase("keep-alive")) {
             return true;
         }
         return false;

@@ -5,11 +5,14 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.nio.file.*;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
-import java.nio.*;
-
+import java.nio.charset.StandardCharsets;
 
 public class SocketConnection {
     public enum ConnectionFsm {
@@ -31,14 +34,20 @@ public class SocketConnection {
     public FileChannel activeFileChannel = null;
     public FileChannel activeCgiChannel = null;
     public Process Cgiprocess = null;
-    public CGIContext CGIContext = null;
+    public CGIHandler.CGIContext CGIContext = null;
     public boolean isChunked = false;
     public boolean isKeepAlive = true;
     public boolean headersSent = false;
     public boolean cgiStreamFinished = false;
+    private final Router router;
+    public List<ServerConfig> serverConfig;
+    private String pendingCookieHeader = null;
 
-    public SocketConnection(SocketChannel socket) {
+    public SocketConnection(SocketChannel socket, Router router, List<ServerConfig> config) {
         this.socket = socket;
+        this.router = router;
+        this.serverConfig = config;
+        this.writeBuffer.limit(0);
     }
 
     public void HandlePhase(SelectionKey key) {
@@ -57,12 +66,13 @@ public class SocketConnection {
                     if (this.Cgiprocess != null) {
 
                         if (this.activeCgiChannel == null) {
-                            if (Cgiprocess.exitValue() != 0) {
-                                // Handle Script Error
+                            if (!Cgiprocess.isAlive()) {
+                                this.activeCgiChannel = FileChannel.open(CGIContext.tempFile(),
+                                        StandardOpenOption.READ);
+                                setupCgiResponseHeaders();
+                            } else {
+                                return;
                             }
-                            this.activeCgiChannel = FileChannel.open(CGIContext.tempFile(),
-                                    StandardOpenOption.READ);
-                            setupCgiResponseHeaders();
                         }
                         WriteChunkedResponse(key);
                     } else {
@@ -109,12 +119,13 @@ public class SocketConnection {
         while ((request = parser.ParseRequest(readBuffer)) != null) {
             // routing happen here
 
-            RouteResult respo = new RouteResult();
+            RouteResult respo = router.handle(request, serverConfig, socket.socket().getLocalPort());
             responses.add(respo);
             isKeepAlive = request.isKeepAlive();
             System.out.print(request.toString());
             state = ConnectionFsm.WRITING;
             key.interestOps(SelectionKey.OP_WRITE);
+            UpdateTimeout();
         }
         readBuffer.compact();
 
@@ -242,10 +253,12 @@ public class SocketConnection {
 
     private void prepareResponse(RouteResult result, SelectionKey key) throws IOException {
         StringBuilder headers = new StringBuilder();
+        pendingCookieHeader = result.cookieHeader();
         switch (result.action()) {
             case REDIRECT:
-                // 302 Redirect requires a "Location" header pointing to the new URL
+
                 headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Found\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Location: ").append(result.redirectUrl()).append("\r\n")
                         .append("Content-Length: 0\r\n") // No body needed for redirect
                         .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
@@ -253,16 +266,15 @@ public class SocketConnection {
                 this.isChunked = false;
                 this.activeFileChannel = null;
 
-                // Load all of it into the write buffer right now
                 writeBuffer.clear();
                 writeBuffer.put(headers.toString().getBytes());
                 writeBuffer.flip();
                 break;
 
             case ERROR:
-                // If it's a simple error without a custom file page, send a quick string
                 String errorBody = "<h1>Error " + result.statusCode() + "</h1>";
                 headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Error\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Content-Type: text/html\r\n")
                         .append("Content-Length: ").append(errorBody.length()).append("\r\n\r\n");
 
@@ -278,6 +290,7 @@ public class SocketConnection {
             case SERVE_FILE:
                 long fileSize = Files.size(result.resolvedPath());
                 headers.append("HTTP/1.1 ").append(result.statusCode()).append(" OK\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Content-Type: ").append(result.contentType()).append("\r\n")
                         .append("Content-Length: ").append(fileSize).append("\r\n\r\n");
 
@@ -297,11 +310,10 @@ public class SocketConnection {
                 break;
 
             case DIRECTORY_LISTING:
-                // Generate the HTML payload
-                // Note: Assuming your RouteResult has a getter for the original URI string
-                byte[] dirHtml = generateDirectoryHtml(result.resolvedPath(), result.originalUri());
 
+                byte[] dirHtml = generateDirectoryHtml(result.resolvedPath(), result.originalUri());
                 headers.append("HTTP/1.1 200 OK\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Content-Type: text/html\r\n")
                         .append("Content-Length: ").append(dirHtml.length).append("\r\n")
                         .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
@@ -311,22 +323,31 @@ public class SocketConnection {
 
                 writeBuffer.clear();
                 writeBuffer.put(headers.toString().getBytes());
-
-                // Safety check: Ensure the HTML string fits in your 8000-byte buffer
                 if (writeBuffer.remaining() >= dirHtml.length) {
                     writeBuffer.put(dirHtml);
                 } else {
-                    // If a directory has thousands of files, the HTML might exceed 8000 bytes.
-                    // For a production-grade fix, you would write `dirHtml` to a temp file here
-                    // and serve it via activeFileChannel just like your CGI logic!
                     writeBuffer.put(dirHtml, 0, writeBuffer.remaining());
                 }
 
                 writeBuffer.flip();
                 break;
+            case DELETE_FILE:
+                headers.append("HTTP/1.1 ").append(result.statusCode()).append(" OK\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
+                        .append("Content-Length: 0\r\n")
+                        .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
+
+                this.isChunked = false;
+                this.activeFileChannel = null;
+
+                writeBuffer.clear();
+                writeBuffer.put(headers.toString().getBytes());
+                writeBuffer.flip();
+                break;
             default:
                 // cgi execution to feed chunked data
                 headers.append("HTTP/1.1 200 OK\r\n")
+                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Transfer-Encoding: chunked\r\n\r\n");
                 this.isChunked = true;
                 // this.activeCgiChannel = FileChannel.open(CGIContext.tempFile().getRoot(),
@@ -360,6 +381,7 @@ public class SocketConnection {
             activeFileChannel.close();
             activeFileChannel = null;
         }
+        pendingCookieHeader = null;
         if (!responses.isEmpty()) {
             state = ConnectionFsm.WRITING;
             key.interestOps(SelectionKey.OP_WRITE);
@@ -421,6 +443,7 @@ public class SocketConnection {
 
         StringBuilder responseEnvelope = new StringBuilder();
         responseEnvelope.append("HTTP/1.1 200 OK\r\n")
+            .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                 .append("Transfer-Encoding: chunked\r\n");
 
         if (delimiterIdx != -1) {
@@ -439,11 +462,10 @@ public class SocketConnection {
     }
 
     public void CheckTimeout(SelectionKey key) throws IOException {
-        if (TIMEOUT_MS >= System.currentTimeMillis() - this.lastActiveTime) {
-            System.out.println("Client timed out");
+        long now = System.currentTimeMillis();
+        if (now - lastActiveTime > TIMEOUT_MS) {
             closeConnection(key);
         }
-        ;
     }
 
     public static byte[] generateDirectoryHtml(Path dirPath, String requestUri) throws IOException {
@@ -456,14 +478,14 @@ public class SocketConnection {
             html.append("<a href=\"../\">../</a>\n");
         }
 
-        // Read the directory contents
+        // read the directory contents
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath)) {
             for (Path entry : stream) {
                 String fileName = entry.getFileName().toString();
                 boolean isDir = Files.isDirectory(entry);
 
                 if (isDir) {
-                    fileName += "/"; // Append slash for directories
+                    fileName += "/";
                 }
 
                 String href = requestUri.endsWith("/") ? requestUri + fileName : requestUri + "/" + fileName;
@@ -473,6 +495,6 @@ public class SocketConnection {
         }
 
         html.append("</pre><hr></body></html>");
-        return html.toString().getBytes(charset.StandardCharsets.UTF_8);
+        return html.toString().getBytes(StandardCharsets.UTF_8);
     }
 }
