@@ -1,4 +1,3 @@
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -272,19 +271,39 @@ public class SocketConnection {
                 break;
 
             case ERROR:
-                String errorBody = "<h1>Error " + result.statusCode() + "</h1>";
-                headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Error\r\n")
-                        .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
-                        .append("Content-Type: text/html\r\n")
-                        .append("Content-Length: ").append(errorBody.length()).append("\r\n\r\n");
-
                 this.isChunked = false;
-                this.activeFileChannel = null;
+                if (result.resolvedPath() != null && Files.exists(result.resolvedPath())) {
+                    // Serve the custom error page configured in errorPages, streaming it the
+                    // same way SERVE_FILE does so arbitrarily large pages don't overflow
+                    // the fixed-size writeBuffer.
+                    long errSize = Files.size(result.resolvedPath());
+                    headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Error\r\n")
+                            .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
+                            .append("Content-Type: text/html\r\n")
+                            .append("Content-Length: ").append(errSize).append("\r\n")
+                            .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
 
-                writeBuffer.clear();
-                writeBuffer.put(headers.toString().getBytes());
-                writeBuffer.put(errorBody.getBytes()); // Put both headers and body together
-                writeBuffer.flip();
+                    this.activeFileChannel = FileChannel.open(result.resolvedPath(), StandardOpenOption.READ);
+
+                    writeBuffer.clear();
+                    writeBuffer.put(headers.toString().getBytes());
+                    writeBuffer.flip();
+                } else {
+                    byte[] errorBody = ("<h1>Error " + result.statusCode() + "</h1>")
+                            .getBytes(StandardCharsets.UTF_8);
+                    headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Error\r\n")
+                            .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
+                            .append("Content-Type: text/html\r\n")
+                            .append("Content-Length: ").append(errorBody.length).append("\r\n")
+                            .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
+
+                    this.activeFileChannel = null;
+
+                    writeBuffer.clear();
+                    writeBuffer.put(headers.toString().getBytes());
+                    writeBuffer.put(errorBody); // Put both headers and body together
+                    writeBuffer.flip();
+                }
                 break;
 
             case SERVE_FILE:
@@ -292,7 +311,8 @@ public class SocketConnection {
                 headers.append("HTTP/1.1 ").append(result.statusCode()).append(" OK\r\n")
                         .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Content-Type: ").append(result.contentType()).append("\r\n")
-                        .append("Content-Length: ").append(fileSize).append("\r\n\r\n");
+                        .append("Content-Length: ").append(fileSize).append("\r\n")
+                        .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
 
                 this.isChunked = false;
                 // This handles normal files AND custom error pages (e.g., error_pages/404.html)
@@ -443,8 +463,9 @@ public class SocketConnection {
 
         StringBuilder responseEnvelope = new StringBuilder();
         responseEnvelope.append("HTTP/1.1 200 OK\r\n")
-            .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
-                .append("Transfer-Encoding: chunked\r\n");
+                .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
+                .append("Transfer-Encoding: chunked\r\n")
+                .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n");
 
         if (delimiterIdx != -1) {
             String cgiHeaders = fileContent.substring(0, delimiterIdx);

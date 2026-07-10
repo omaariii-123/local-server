@@ -1,5 +1,3 @@
-
-
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,7 +52,7 @@ class ConfigLoader {
 			});
 		}
 		if(!this.validate(list)){
-			System.err.println("FATAL: No valid server configurations found. Exiting.");
+			System.err.println("FATAL: Invalid server configuration. Exiting.");
 			System.exit(1);
 		}
 		return list;

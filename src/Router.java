@@ -1,9 +1,10 @@
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
+import java.nio.charset.*;
 
 public class Router {
 
@@ -20,7 +21,21 @@ public class Router {
     }
 
     public RouteResult handle(HttpRequest request, List<ServerConfig> serverConfigs, int defaultPort) {
-        target = extract(request.Headers.get("host"), defaultPort);
+        String hostHeader = request.Headers.get("host");
+        if (hostHeader == null) {
+            // HTTP/1.1 requires a Host header; without it we can't even pick a server
+            // block, so fail fast with a 400 instead of letting a null Target blow up
+            // findMatchedServer() below.
+            return new RouteResult(
+                    RouteResult.Action.ERROR,
+                    400,
+                    null,
+                    "text/html",
+                    null,
+                    null,
+                    null, null);
+        }
+        target = extract(hostHeader, defaultPort);
         server = findMatchedServer(serverConfigs);
         if (server == null) {
             return new RouteResult(
@@ -33,18 +48,32 @@ public class Router {
                     null, null);
         }
 
+        if (!request.requestLine.validate()) {
+            return createError(400);
+        }
+
         String path = request.requestLine.getPath();
+        String query = "";
+        int queryIdx = path.indexOf('?');
+        if (queryIdx != -1) {
+            query = path.substring(queryIdx + 1);
+            path = path.substring(0, queryIdx);
+        }
         Route route = extract(server.routes, path);
         if (route == null) {
             return createError(404);
         }
+
         if (route.redirection != null) {
+            JsonElement urlElement = route.redirection.values.get("url");
+            String redirectUrl = (urlElement instanceof JsonString s) ? s.value
+                    : (urlElement != null ? urlElement.toString() : "/");
             return new RouteResult(
                     RouteResult.Action.REDIRECT,
                     route.redirection.values.get("code") instanceof JsonNumber n ? n.value : 302,
                     null,
                     "text/html",
-                    route.redirection.values.get("url") instanceof JsonString s ? s.value : route.redirection.values.get("url").toString(),
+                    redirectUrl,
                     null,
                     null, path);
         }
@@ -102,17 +131,27 @@ public class Router {
                     return createError(400);
                 }
             }
+            if (isChunked && request.body != null && request.body.size() > server.clientMaxBodySize) {
+                // Content-Length isn't sent with chunked requests, so the cap has to be
+                // enforced against what was actually buffered once dechunking finished.
+                return createError(413);
+            }
             try {
                 if (request.body != null && request.body.size() > 0) {
                     Path targetPath = finalUri;
                     byte[] payload = request.body.toByteArray();
 
                     if (Files.isDirectory(finalUri)) {
-                        String uploadFileName = isMultipart ? extractMultipartFileName(payload) : null;
-                        if (uploadFileName == null || uploadFileName.isBlank()) {
-                            uploadFileName = "upload.bin";
+                        String extension = ".bin";
+                        if (isMultipart) {
+                            String originalName = extractMultipartFileName(payload);
+                            if (originalName != null && originalName.lastIndexOf('.') != -1) {
+                                extension = originalName.substring(originalName.lastIndexOf('.'));
+                            }
                         }
-                        targetPath = finalUri.resolve(uploadFileName).normalize();
+
+                        String uniqueFileName = UUID.randomUUID().toString() + extension;
+                        targetPath = finalUri.resolve(uniqueFileName).normalize();
                     }
 
                     if (!Files.exists(targetPath.getParent())) {
@@ -209,11 +248,16 @@ public class Router {
             String executablePath = route.cgi.get(extension);
             try {
                 CGIHandler cgiHandler = new CGIHandler();
+                byte[] cgiBody = request.body != null ? request.body.toByteArray() : new byte[0];
+                String cgiContentType = request.Headers.get("content-type");
                 CGIHandler.CGIContext context = cgiHandler.execute(
                         finalUri,
                         leftoverUri,
                         request.requestLine.method,
-                        executablePath);
+                        executablePath,
+                        cgiBody,
+                        cgiContentType,
+                        query);
 
                 return new RouteResult(
                         RouteResult.Action.EXECUTE_CGI,
@@ -237,6 +281,45 @@ public class Router {
                 null,
                 null,
                 cookieHeader, path);
+    }
+
+    private static final java.util.Map<String, String> CONTENT_TYPE_EXTENSIONS = java.util.Map.ofEntries(
+            java.util.Map.entry("image/png", ".png"),
+            java.util.Map.entry("image/jpeg", ".jpg"),
+            java.util.Map.entry("image/gif", ".gif"),
+            java.util.Map.entry("image/webp", ".webp"),
+            java.util.Map.entry("image/svg+xml", ".svg"),
+            java.util.Map.entry("image/bmp", ".bmp"),
+            java.util.Map.entry("application/pdf", ".pdf"),
+            java.util.Map.entry("application/zip", ".zip"),
+            java.util.Map.entry("application/json", ".json"),
+            java.util.Map.entry("text/plain", ".txt"),
+            java.util.Map.entry("text/html", ".html"),
+            java.util.Map.entry("text/css", ".css"),
+            java.util.Map.entry("video/mp4", ".mp4"),
+            java.util.Map.entry("audio/mpeg", ".mp3"));
+
+    private String extensionForContentType(String contentTypeHeader) {
+        if (contentTypeHeader == null) {
+            return null;
+        }
+        String base = contentTypeHeader.split(";")[0].trim().toLowerCase();
+        return CONTENT_TYPE_EXTENSIONS.get(base);
+    }
+
+    private String resolveUploadExtension(boolean isMultipart, byte[] payload, String contentTypeHeader) {
+        if (isMultipart && payload != null) {
+            String originalName = extractMultipartFileName(payload);
+            if (originalName != null && originalName.lastIndexOf('.') != -1) {
+                return originalName.substring(originalName.lastIndexOf('.'));
+            }
+        }
+        // Raw/binary uploads (Postman "binary" mode, curl --data-binary, etc.) never
+        // carry a filename anywhere in the request - the Content-Type header is the
+        // only signal available, so fall back to a MIME -> extension guess before
+        // giving up and using ".bin".
+        String guessed = extensionForContentType(contentTypeHeader);
+        return guessed != null ? guessed : ".bin";
     }
 
     private String getMimeType(Path path) {
@@ -294,7 +377,7 @@ public class Router {
     }
 
     private String extractMultipartFileName(byte[] body) {
-        String text = new String(body, java.nio.charset.StandardCharsets.ISO_8859_1);
+        String text = new String(body, StandardCharsets.ISO_8859_1);
         int index = text.indexOf("filename=");
         if (index == -1) {
             return null;
@@ -311,7 +394,7 @@ public class Router {
     }
 
     private byte[] extractMultipartPayload(byte[] body) {
-        String text = new String(body, java.nio.charset.StandardCharsets.ISO_8859_1);
+        String text = new String(body, StandardCharsets.ISO_8859_1);
         int payloadStart = text.indexOf("\r\n\r\n");
         if (payloadStart == -1) {
             return body;
@@ -321,12 +404,15 @@ public class Router {
         if (payloadEnd == -1 || payloadEnd < payloadStart) {
             payloadEnd = body.length;
         }
-        return text.substring(payloadStart, payloadEnd).getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        return text.substring(payloadStart, payloadEnd).getBytes(StandardCharsets.ISO_8859_1);
     }
 
     public Route extract(List<Route> list, String path) {
         return list.stream().filter((r) -> {
-            return path.startsWith(r.path);
+            if (r.path.equals("/")) {
+                return true;
+            }
+            return path.equals(r.path) || path.startsWith(r.path + "/");
         }).max(Comparator.comparingInt((r) -> r.path.length())).orElse(null);
     }
 
@@ -351,5 +437,19 @@ public class Router {
                 .filter(x -> x.ports.contains(target.port()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    public String getFileExtension(String contentDisposition) {
+
+        int start = contentDisposition.indexOf("filename=\"");
+        if (start == -1)
+            return ".bin";
+
+        start += 10;
+        int end = contentDisposition.indexOf("\"", start);
+        String originalFilename = contentDisposition.substring(start, end);
+
+        int lastDot = originalFilename.lastIndexOf('.');
+        return (lastDot == -1) ? ".bin" : originalFilename.substring(lastDot);
     }
 }

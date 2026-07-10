@@ -1,4 +1,3 @@
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
@@ -27,13 +26,12 @@ public class Server {
     Selector selector = Selector.open();
 
     // GET UNIQUE PORTS AVOIDING DOUBLE BINDING
+    // Note: multiple ServerConfig blocks legitimately share a port for name-based
+    // virtual hosting (e.g. localhost:8080 and test.com:8080), so that alone is not
+    // an error - true host+port duplicates are already rejected fatally in
+    // ConfigLoader.validate() before we ever get here.
     Set<Integer> uniquePorts = new HashSet<>();
     for (ServerConfig config : configs) {
-      for (Integer port : config.ports) {
-        if (!uniquePorts.add(port)) {
-          System.err.println("WARNING: Duplicate port configuration detected for port: " + port);
-        }
-      }
       uniquePorts.addAll(config.ports);
     }
 
