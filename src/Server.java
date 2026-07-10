@@ -5,22 +5,51 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 public class Server {
 
   // Main method
+  private final List<ServerConfig> configs;
+  private final Router router;
 
-  public static void main(String[] args) throws IOException {
+  public Server(List<ServerConfig> configs) {
+    this.configs = configs;
+    this.router = new Router();
+  }
+
+  public void start() throws IOException {
 
     // new instance of A selector monitoring the channels
     Selector selector = Selector.open();
-    ArrayList<Integer> ports = new ArrayList<Integer>();
-    ports.add(8080);
-    ports.add(6060);
-    ports.add(5000);
+
+    // GET UNIQUE PORTS AVOIDING DOUBLE BINDING
+    Set<Integer> uniquePorts = new HashSet<>();
+    for (ServerConfig config : configs) {
+      for (Integer port : config.ports) {
+        if (!uniquePorts.add(port)) {
+          System.err.println("WARNING: Duplicate port configuration detected for port: " + port);
+        }
+      }
+      uniquePorts.addAll(config.ports);
+    }
+
+    // bind only uniuqe ports
+    for (Integer port : uniquePorts) {
+      try {
+        ServerSocketChannel channel = ServerSocketChannel.open();
+        channel.configureBlocking(false);
+        channel.bind(new InetSocketAddress(port));
+        channel.register(selector, SelectionKey.OP_ACCEPT);
+        System.out.println("Listening on port: " + port);
+      } catch (Exception e) {
+        System.err.println("Failed to bind port " + port + ": " + e.getMessage());
+      }
+    }
+
     /*
      * - chaneels must be configured no blocking in order to register to a selector
      * - also it return a selection key that acts as ref of this register chanell
@@ -39,24 +68,12 @@ public class Server {
      * attaching object : u can attach and retrieve objects from a selection key
      * 
      */
-    ports.forEach(x -> {
 
-      try {
-        ServerSocketChannel channel = ServerSocketChannel.open();
-        channel.configureBlocking(false);
-        channel.bind(new InetSocketAddress(x));
-        channel.register(selector, SelectionKey.OP_ACCEPT);
-
-      } catch (Exception e) {
-        System.err.println("Failed to bind port " + x + ": " + e.getMessage());
-      }
-
-    });
     long lastTimeoutCheck = System.currentTimeMillis();
     while (true) {
       selector.select(1000);
       long currentTime = System.currentTimeMillis();
-      if (currentTime - lastTimeoutCheck > 1000) {
+      if (currentTime - lastTimeoutCheck >= 1000) {
 
         for (SelectionKey key : selector.keys()) {
           if (key.isValid() && key.attachment() instanceof SocketConnection) {
@@ -73,7 +90,7 @@ public class Server {
             }
           }
         }
-        lastTimeoutCheck = currentTime; 
+        lastTimeoutCheck = currentTime;
 
       }
 
@@ -84,15 +101,17 @@ public class Server {
         SelectionKey key = keyIterator.next();
         // removing the key so the next time it wont be processed again
         keyIterator.remove();
-        if (!key.isValid()) {
-          continue;
-        }
 
         // if the key is acceptable meaning it the server socket channel respo
         // to accept the connection in order to make a new socket channel for the client
         // also we track a connectionContext to track the current prorgess and state
         try {
-          if (key.isAcceptable()) {
+
+          if (!key.isValid()) {
+            continue;
+          }
+
+          if (key.isValid() && key.isAcceptable()) {
             ServerSocketChannel server = (ServerSocketChannel) (key.channel());
 
             SocketChannel client = server.accept();
@@ -100,12 +119,12 @@ public class Server {
             if (client == null) {
               continue;
             }
-            SocketConnection connectionContext = new SocketConnection(client);
+            SocketConnection connectionContext = new SocketConnection(client, this.router, this.configs);
             client.configureBlocking(false);
             client.register(selector, SelectionKey.OP_READ, connectionContext);
 
           }
-          if (key.isReadable()) {
+          if (key.isValid() && key.isReadable()) {
             // we retrieve the attachmenent to get Metadata about the channel also to track
             // our progress
             SocketConnection socketConnection = (SocketConnection) key.attachment();
@@ -114,13 +133,14 @@ public class Server {
 
             // key.interestOps(SelectionKey.OP_WRITE);
           }
-          if (key.isWritable()) {
+          if (key.isValid() && key.isWritable()) {
             SocketConnection socketconnection = (SocketConnection) key.attachment();
             socketconnection.HandlePhase(key);
 
           }
         } catch (Exception e) {
           System.err.println("Connection error: " + e.getMessage());
+          e.printStackTrace();
           key.cancel();
           try {
             if (key.channel() != null) {
@@ -135,5 +155,4 @@ public class Server {
     }
 
   }
-
 }

@@ -1,18 +1,14 @@
-package src;
 
 import java.util.Set;
-
 public class RequestLine {
 
     private static final Set<String> METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH",
-            "DELETE", "OPTIONS", "HEAD"
-    );
+            "DELETE", "OPTIONS", "HEAD");
 
     String path;
     String method;
     String protocol;
-
 
     public boolean validate() {
 
@@ -34,16 +30,28 @@ public class RequestLine {
 
         return true;
     }
+
     public void setMethod(String method) {
         this.method = method;
     }
+
     public void setPath(String path) {
         this.path = path;
     }
-    public String getPath(){
-        return path;
-    }
+
     public void setProtocol(String protocol) {
         this.protocol = protocol;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public String getMethod() {
+        return method;
+    }
+
+    public String getProtocol() {
+        return protocol;
     }
 }

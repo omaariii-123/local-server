@@ -1,4 +1,3 @@
-package src;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,4 +53,3 @@ public class ServerConfig {
 		return port;
 	}
 }
- 

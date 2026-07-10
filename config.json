@@ -28,6 +28,12 @@
         "autoindex": false
       },
       {
+        "path": "/upload",
+        "root": "./public/uploads",
+        "acceptedMethods": ["GET", "POST", "DELETE"],
+        "autoindex": false
+      },
+      {
         "path": "/api",
         "root": "./public/api",
         "acceptedMethods": ["GET", "POST"],
@@ -62,6 +68,12 @@
         "acceptedMethods": ["GET"],
         "autoindex": false,
         "defaultFile": "home.html"
+      },
+      {
+        "path": "/submit",
+        "root": "./public/test_site",
+        "acceptedMethods": ["POST"],
+        "autoindex": false
       }
     ]
   }

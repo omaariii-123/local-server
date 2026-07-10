@@ -2,8 +2,7 @@
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.*;
-import java.nio.charset.*;
+import java.nio.charset.StandardCharsets;
 
 public class HttpParser {
     public enum RequestFsm {
@@ -30,7 +29,6 @@ public class HttpParser {
     private Integer BodyBytes = 0;
 
     private String boundary = null;
-    private String multipartFileName = null;
     private FileChannel fileUploadChannel = null;
     private final byte[] boundaryBuffer = new byte[1024];
     private int boundaryBufIdx = 0;
@@ -85,23 +83,28 @@ public class HttpParser {
                         if (endsWithCRLF() && token.length() == 2) {
 
                             token.setLength(0);
-                            String transferEncoding = currentRequest.Headers.get("Transfer-Encoding");
-                            String contentType = currentRequest.Headers.get("Content-Type");
-                            String contentLength = currentRequest.Headers.get("Content-Length");
+                            String transferEncoding = currentRequest.Headers.get("transfer-encoding");
+                            String contentType = currentRequest.Headers.get("content-type");
+                            String contentLength = currentRequest.Headers.get("content-length");
                             if ("chunked".equalsIgnoreCase(transferEncoding)) {
                                 state = RequestFsm.READ_CHUNK_SIZE;
                             } else if (contentType != null && contentType.startsWith("multipart/form-data")) {
-                                int boundaryIdx = contentType.indexOf("boundary=");
-                                if (boundaryIdx != -1) {
-                                    this.boundary = "--" + contentType.substring(boundaryIdx + 9).trim();
+                                if (contentLength != null) {
+                                    state = RequestFsm.READING_BODY;
+                                    BodyBytes = Integer.parseInt(contentLength);
+                                } else {
+                                    HttpRequest finished = currentRequest;
+                                    reset();
+                                    return finished;
                                 }
-                                state = RequestFsm.READ_MULTIPART_HEADERS;
                             } else if (contentLength != null
                                     && Integer.parseInt(contentLength) > 0) {
                                 state = RequestFsm.READING_BODY;
                                 BodyBytes = Integer.parseInt((contentLength));
                             } else {
-                                state = RequestFsm.REQUEST_COMPLETE;
+                                HttpRequest finished = currentRequest;
+                                reset();
+                                return finished;
                             }
                         }
                     } else if (b == ':') {
@@ -118,7 +121,7 @@ public class HttpParser {
                     token.append((char) b);
                     if (endsWithCRLF()) {
                         currentRequest.Headers.put(
-                                currentHeaderName,
+                                currentHeaderName.toLowerCase(),
                                 token.substring(0, token.length() - 2).trim());
                         token.setLength(0);
                         state = RequestFsm.READ_HEADER_NAME;
@@ -134,7 +137,9 @@ public class HttpParser {
                         token.setLength(0);
 
                         if (this.BodyBytes == 0) {
-                            state = RequestFsm.REQUEST_COMPLETE;
+                            HttpRequest finished = currentRequest;
+                            reset();
+                            return finished;
                         } else {
                             state = RequestFsm.READ_CHUNK_DATA;
                         }
@@ -216,7 +221,6 @@ public class HttpParser {
         currentHeaderName = null;
 
         this.boundary = null;
-        this.multipartFileName = null;
         if (this.fileUploadChannel != null) {
             try {
                 this.fileUploadChannel.close();
