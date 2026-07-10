@@ -1,10 +1,11 @@
+package src;
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 
 public class HttpRequest {
 
     public HashMap<String, String> Headers = new HashMap<>();
-    private ByteArrayOutputStream body = new ByteArrayOutputStream();
+    public ByteArrayOutputStream body = new ByteArrayOutputStream();
     RequestLine requestLine;
     //
     public boolean HasBody() {
