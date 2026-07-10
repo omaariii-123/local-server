@@ -478,7 +478,6 @@ public class SocketConnection {
             html.append("<a href=\"../\">../</a>\n");
         }
 
-        // read the directory contents
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath)) {
             for (Path entry : stream) {
                 String fileName = entry.getFileName().toString();

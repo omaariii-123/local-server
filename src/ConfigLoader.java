@@ -93,7 +93,6 @@ class ConfigLoader {
 
         System.out.println("--- RUNNING ROUTER GAUNTLET TESTS ---");
 
-        // TEST 1: The Standard GET (Checking auto-index / default file)
         HttpRequest getReq = new HttpRequest();
         getReq.requestLine = new RequestLine();
         getReq.requestLine.setMethod("GET");

@@ -60,7 +60,6 @@ public class Router {
                     System.out.println("DEBUG: Recognized returning user with ID: " + sessionId);
                 }
             } catch (Exception e) {
-                // Ignore malformed cookies
             }
         }
 
