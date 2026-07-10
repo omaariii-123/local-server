@@ -1,4 +1,3 @@
-package utils;
 
 import java.net.HttpCookie;
 import java.net.http.HttpHeaders;

@@ -5,12 +5,11 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.util.LinkedList;
 import java.util.Queue;
-import utils.RouteResult;
-import utils.CGIHandler.CGIContext;
+import java.nio.*;
+
 
 public class SocketConnection {
     public enum ConnectionFsm {
@@ -297,6 +296,34 @@ public class SocketConnection {
 
                 break;
 
+            case DIRECTORY_LISTING:
+                // Generate the HTML payload
+                // Note: Assuming your RouteResult has a getter for the original URI string
+                byte[] dirHtml = generateDirectoryHtml(result.resolvedPath(), result.originalUri());
+
+                headers.append("HTTP/1.1 200 OK\r\n")
+                        .append("Content-Type: text/html\r\n")
+                        .append("Content-Length: ").append(dirHtml.length).append("\r\n")
+                        .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
+
+                this.isChunked = false;
+                this.activeFileChannel = null;
+
+                writeBuffer.clear();
+                writeBuffer.put(headers.toString().getBytes());
+
+                // Safety check: Ensure the HTML string fits in your 8000-byte buffer
+                if (writeBuffer.remaining() >= dirHtml.length) {
+                    writeBuffer.put(dirHtml);
+                } else {
+                    // If a directory has thousands of files, the HTML might exceed 8000 bytes.
+                    // For a production-grade fix, you would write `dirHtml` to a temp file here
+                    // and serve it via activeFileChannel just like your CGI logic!
+                    writeBuffer.put(dirHtml, 0, writeBuffer.remaining());
+                }
+
+                writeBuffer.flip();
+                break;
             default:
                 // cgi execution to feed chunked data
                 headers.append("HTTP/1.1 200 OK\r\n")
@@ -417,5 +444,35 @@ public class SocketConnection {
             closeConnection(key);
         }
         ;
+    }
+
+    public static byte[] generateDirectoryHtml(Path dirPath, String requestUri) throws IOException {
+        StringBuilder html = new StringBuilder();
+        html.append("<html><head><title>Index of ").append(requestUri).append("</title></head><body>");
+        html.append("<h1>Index of ").append(requestUri).append("</h1><hr><pre>");
+
+        // Add a "Go Back" link if we aren't at the root
+        if (!requestUri.equals("/")) {
+            html.append("<a href=\"../\">../</a>\n");
+        }
+
+        // Read the directory contents
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath)) {
+            for (Path entry : stream) {
+                String fileName = entry.getFileName().toString();
+                boolean isDir = Files.isDirectory(entry);
+
+                if (isDir) {
+                    fileName += "/"; // Append slash for directories
+                }
+
+                String href = requestUri.endsWith("/") ? requestUri + fileName : requestUri + "/" + fileName;
+
+                html.append("<a href=\"").append(href).append("\">").append(fileName).append("</a>\n");
+            }
+        }
+
+        html.append("</pre><hr></body></html>");
+        return html.toString().getBytes(charset.StandardCharsets.UTF_8);
     }
 }

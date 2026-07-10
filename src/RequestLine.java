@@ -5,17 +5,14 @@ public class RequestLine {
 
     private static final Set<String> METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH",
-            "DELETE", "OPTIONS", "HEAD"
-    );
+            "DELETE", "OPTIONS", "HEAD");
 
     private static final Pattern PATH_PATTERN = Pattern.compile(
-            "^/[A-Za-z0-9._~!$&'()*+,;=:@/%-]*(\\?[A-Za-z0-9._~!$&'()*+,;=:@/%?&=-]*)?$"
-    );
+            "^/[A-Za-z0-9._~!$&'()*+,;=:@/%-]*(\\?[A-Za-z0-9._~!$&'()*+,;=:@/%?&=-]*)?$");
 
     String path;
     String method;
     String protocol;
-
 
     public boolean validate() {
 
@@ -37,13 +34,28 @@ public class RequestLine {
 
         return PATH_PATTERN.matcher(path).matches();
     }
+
     public void setMethod(String method) {
         this.method = method;
     }
+
     public void setPath(String path) {
         this.path = path;
     }
+
     public void setProtocol(String protocol) {
         this.protocol = protocol;
+    }
+
+    public String getPath() {
+        return path;
+    }
+
+    public String getMethod() {
+        return method;
+    }
+
+    public String getProtocol() {
+        return protocol;
     }
 }
