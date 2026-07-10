@@ -1,15 +1,12 @@
+package src;
+
 import java.util.Set;
-import java.util.regex.Pattern;
 
 public class RequestLine {
 
     private static final Set<String> METHODS = Set.of(
             "GET", "POST", "PUT", "PATCH",
             "DELETE", "OPTIONS", "HEAD"
-    );
-
-    private static final Pattern PATH_PATTERN = Pattern.compile(
-            "^/[A-Za-z0-9._~!$&'()*+,;=:@/%-]*(\\?[A-Za-z0-9._~!$&'()*+,;=:@/%?&=-]*)?$"
     );
 
     String path;
@@ -35,13 +32,16 @@ public class RequestLine {
             return false;
         }
 
-        return PATH_PATTERN.matcher(path).matches();
+        return true;
     }
     public void setMethod(String method) {
         this.method = method;
     }
     public void setPath(String path) {
         this.path = path;
+    }
+    public String getPath(){
+        return path;
     }
     public void setProtocol(String protocol) {
         this.protocol = protocol;

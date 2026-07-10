@@ -1,0 +1,68 @@
+[
+  {
+    "host": "localhost",
+    "ports": [8080, 8081],
+    "isDefaultServer": true,
+    "clientMaxBodySize": 10485760,
+    "errorPages": {
+      "400": "./error_pages/400.html",
+      "403": "./error_pages/403.html",
+      "404": "./error_pages/404.html",
+      "405": "./error_pages/405.html",
+      "411": "./error_pages/411.html",
+      "413": "./error_pages/413.html",
+      "500": "./error_pages/500.html"
+    },
+    "routes": [
+      {
+        "path": "/",
+        "root": "./public/html",
+        "acceptedMethods": ["GET"],
+        "autoindex": true,
+        "defaultFile": "index.html"
+      },
+      {
+        "path": "/uploads",
+        "root": "./public/uploads",
+        "acceptedMethods": ["GET", "POST", "DELETE"],
+        "autoindex": false
+      },
+      {
+        "path": "/api",
+        "root": "./public/api",
+        "acceptedMethods": ["GET", "POST"],
+        "cgi": {
+          ".py": "/usr/bin/python3",
+          ".php": "/usr/bin/php-cgi"
+        }
+      },
+      {
+        "path": "/old-site",
+        "root": "./public/old",
+        "acceptedMethods": ["GET"],
+        "redirection": {
+          "code": 301,
+          "url": "http://localhost:8080/"
+        }
+      }
+    ]
+  },
+  {
+    "host": "test.com",
+    "ports": [8080],
+    "isDefaultServer": false,
+    "clientMaxBodySize": 500,
+    "errorPages": {
+      "404": "./error_pages/test_404.html"
+    },
+    "routes": [
+      {
+        "path": "/",
+        "root": "./public/test_site",
+        "acceptedMethods": ["GET"],
+        "autoindex": false,
+        "defaultFile": "home.html"
+      }
+    ]
+  }
+]
