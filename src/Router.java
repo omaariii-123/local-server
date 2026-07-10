@@ -136,20 +136,54 @@ public class Router {
                 // enforced against what was actually buffered once dechunking finished.
                 return createError(413);
             }
+
+            // if the target path points to an existing CGI script, skip the upload
+            // hndler entirely and let it fall through to the CGI execution block below.
+            if (Files.exists(finalUri) && !Files.isDirectory(finalUri)) {
+                String targetName = finalUri.getFileName().toString();
+                int tdot = targetName.lastIndexOf('.');
+                if (tdot > 0 && route.cgi != null && route.cgi.containsKey(targetName.substring(tdot))) {
+                    // fall through to the CGI block — do NOT process as an upload.
+                    // jump to the section below the POST block by breaking out early.
+                    goto_cgi: {
+                        String cgiExt = targetName.substring(tdot);
+                        String executablePath = route.cgi.get(cgiExt);
+                        try {
+                            CGIHandler cgiHandler = new CGIHandler();
+                            byte[] cgiBody = request.body != null ? request.body.toByteArray() : new byte[0];
+                            String cgiContentType = request.Headers.get("content-type");
+                            CGIHandler.CGIContext context = cgiHandler.execute(
+                                    finalUri,
+                                    leftoverUri,
+                                    method,
+                                    executablePath,
+                                    cgiBody,
+                                    cgiContentType,
+                                    query);
+                            return new RouteResult(
+                                    RouteResult.Action.EXECUTE_CGI,
+                                    200,
+                                    context.tempFile(),
+                                    "text/html",
+                                    null,
+                                    context,
+                                    cookieHeader, path);
+                        } catch (IOException e) {
+                            System.err.println("CGI Execution failed: " + e.getMessage());
+                            return createError(500);
+                        }
+                    }
+                }
+            }
+
             try {
                 if (request.body != null && request.body.size() > 0) {
                     Path targetPath = finalUri;
                     byte[] payload = request.body.toByteArray();
 
                     if (Files.isDirectory(finalUri)) {
-                        String extension = ".bin";
-                        if (isMultipart) {
-                            String originalName = extractMultipartFileName(payload);
-                            if (originalName != null && originalName.lastIndexOf('.') != -1) {
-                                extension = originalName.substring(originalName.lastIndexOf('.'));
-                            }
-                        }
-
+                        String contentTypeHeader = request.Headers.get("content-type");
+                        String extension = resolveUploadExtension(isMultipart, payload, contentTypeHeader);
                         String uniqueFileName = UUID.randomUUID().toString() + extension;
                         targetPath = finalUri.resolve(uniqueFileName).normalize();
                     }
@@ -314,7 +348,7 @@ public class Router {
                 return originalName.substring(originalName.lastIndexOf('.'));
             }
         }
-        // Raw/binary uploads (Postman "binary" mode, curl --data-binary, etc.) never
+        
         // carry a filename anywhere in the request - the Content-Type header is the
         // only signal available, so fall back to a MIME -> extension guess before
         // giving up and using ".bin".

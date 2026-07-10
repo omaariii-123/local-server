@@ -26,9 +26,9 @@ public class Route {
     public static String extract(JsonObject node, String key){
         JsonElement str = node.values.get(key);
         if (str instanceof JsonString s){
-            return s.value;
+            return s.value.isEmpty() ? null : s.value;
         }
-        return "";
+        return null;
     }
      public static boolean extract(JsonObject node, String key, boolean def){
         JsonElement str = node.values.get(key);

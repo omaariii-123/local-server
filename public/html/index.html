@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My HTTP Server</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    h1 { font-size: 2.5rem; color: #58a6ff; margin-bottom: 0.5rem; }
+    p  { color: #8b949e; margin-bottom: 2rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 700px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 1.2rem;
+    }
+    .card h2 { font-size: 1rem; color: #58a6ff; margin-bottom: 0.4rem; }
+    .card p  { font-size: 0.85rem; color: #8b949e; margin: 0; }
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .status { margin-top: 2rem; font-size: 0.8rem; color: #3fb950; }
+  </style>
+</head>
+<body>
+  <h1>&#127760; HTTP/1.1 Server</h1>
+  <p>A hand-built Java NIO web server</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>&#128196; Static Files</h2>
+      <p>GET requests serve files from <code>public/html/</code></p>
+    </div>
+    <div class="card">
+      <h2>&#128228; Upload</h2>
+      <p><a href="/upload">POST /upload</a> — multipart &amp; chunked supported</p>
+    </div>
+    <div class="card">
+      <h2>&#129302; CGI</h2>
+      <p><a href="/api/">GET /api/</a> — Python CGI scripts via <code>/usr/bin/python3</code></p>
+    </div>
+    <div class="card">
+      <h2>&#128257; Redirect</h2>
+      <p><a href="/old-site">GET /old-site</a> — 301 redirect demo</p>
+    </div>
+    <div class="card">
+      <h2>&#128274; Sessions</h2>
+      <p>A session cookie is issued automatically on every fresh request</p>
+    </div>
+    <div class="card">
+      <h2>&#9888;&#65039; Error Pages</h2>
+      <p><a href="/does-not-exist">Try a 404</a> — custom error pages for 400, 403, 404, 405, 413, 500</p>
+    </div>
+  </div>
+
+  <p class="status">&#9679; Server running</p>
+</body>
+</html>

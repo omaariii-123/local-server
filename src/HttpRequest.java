@@ -18,10 +18,12 @@ public class HttpRequest {
     public boolean isKeepAlive() {
         String connection = Headers.get("connection");
 
-        if (connection != null && connection.equalsIgnoreCase("keep-alive")) {
-            return true;
+        if (connection != null) {
+
+            return !connection.equalsIgnoreCase("close");
         }
-        return false;
+
+        return "HTTP/1.1".equals(requestLine.getProtocol());
     }
 
 }

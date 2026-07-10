@@ -37,20 +37,11 @@ public class CGIHandler {
         pb.redirectErrorStream(true);
         Process process = pb.start();
 
-        // Feed the request body to the script's stdin, then close it so a script
-        // blocked on e.g. sys.stdin.read() sees EOF instead of hanging forever.
-        // Done synchronously, right here on the same event-loop thread - no helper
-        // thread, per the one-process/one-thread rule. The OS pipe buffer (tens of
-        // KB) absorbs small/medium bodies without blocking; a body close to
-        // clientMaxBodySize could in theory apply brief backpressure if the script is
-        // slow to start reading, same tradeoff the rest of this codebase already
-        // accepts for synchronous file writes on uploads (see Router.handle()).
         try (var stdin = process.getOutputStream()) {
             if (payload.length > 0) {
                 stdin.write(payload);
             }
         } catch (IOException ignored) {
-            // Process may have already exited / closed its stdin - nothing to do.
         }
 
         System.out.println("CGI process started for script: " + scriptPath + " with PID: " + process.pid());

@@ -23,7 +23,7 @@ public class SocketConnection {
     }
 
     private long lastActiveTime = System.currentTimeMillis();
-    private final Integer TIMEOUT_MS = 30000;
+    private final Integer TIMEOUT_MS = 15000;
     public ByteBuffer readBuffer = ByteBuffer.allocateDirect(8000);
     public ByteBuffer writeBuffer = ByteBuffer.allocateDirect(8000);
     public SocketChannel socket;
@@ -273,8 +273,8 @@ public class SocketConnection {
             case ERROR:
                 this.isChunked = false;
                 if (result.resolvedPath() != null && Files.exists(result.resolvedPath())) {
-                    // Serve the custom error page configured in errorPages, streaming it the
-                    // same way SERVE_FILE does so arbitrarily large pages don't overflow
+                    // serve the custom error page configured in errorPages, streaming it the
+                    // same way SERVE_FILE does so large pages don't overflow
                     // the fixed-size writeBuffer.
                     long errSize = Files.size(result.resolvedPath());
                     headers.append("HTTP/1.1 ").append(result.statusCode()).append(" Error\r\n")
@@ -316,7 +316,7 @@ public class SocketConnection {
 
                 this.isChunked = false;
                 // This handles normal files AND custom error pages (e.g., error_pages/404.html)
-                // Pointing to the file in disk after we r going to consume it in the writing
+                // pointing to the file in disk after we r going to consume it in the writing
                 // respons whatever we have
                 // it open also it has an internal buffer the keep position and limit increement
                 // auto when you read from it
@@ -330,8 +330,13 @@ public class SocketConnection {
                 break;
 
             case DIRECTORY_LISTING:
-
+                // build the full HTML in memory, then write it to a temp file and stream it
+                // through activeFileChannel — same path as SERVE_FILE. This avoids the 8 KB
+                // writeBuffer truncation that happens when a directory has many entries.
                 byte[] dirHtml = generateDirectoryHtml(result.resolvedPath(), result.originalUri());
+                java.nio.file.Path dirTempFile = java.nio.file.Files.createTempFile("dirlist_", ".html");
+                java.nio.file.Files.write(dirTempFile, dirHtml);
+
                 headers.append("HTTP/1.1 200 OK\r\n")
                         .append(pendingCookieHeader != null ? "Set-Cookie: " + pendingCookieHeader + "\r\n" : "")
                         .append("Content-Type: text/html\r\n")
@@ -339,16 +344,11 @@ public class SocketConnection {
                         .append("Connection: ").append(isKeepAlive ? "keep-alive" : "close").append("\r\n\r\n");
 
                 this.isChunked = false;
-                this.activeFileChannel = null;
+                this.activeFileChannel = FileChannel.open(dirTempFile,
+                        StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE);
 
                 writeBuffer.clear();
                 writeBuffer.put(headers.toString().getBytes());
-                if (writeBuffer.remaining() >= dirHtml.length) {
-                    writeBuffer.put(dirHtml);
-                } else {
-                    writeBuffer.put(dirHtml, 0, writeBuffer.remaining());
-                }
-
                 writeBuffer.flip();
                 break;
             case DELETE_FILE:
@@ -402,6 +402,7 @@ public class SocketConnection {
             activeFileChannel = null;
         }
         pendingCookieHeader = null;
+        headersSent = false;
         if (!responses.isEmpty()) {
             state = ConnectionFsm.WRITING;
             key.interestOps(SelectionKey.OP_WRITE);
@@ -484,7 +485,8 @@ public class SocketConnection {
 
     public void CheckTimeout(SelectionKey key) throws IOException {
         long now = System.currentTimeMillis();
-        if (now - lastActiveTime > TIMEOUT_MS) {
+        long idle = now - lastActiveTime;
+        if (idle > TIMEOUT_MS) {
             closeConnection(key);
         }
     }
